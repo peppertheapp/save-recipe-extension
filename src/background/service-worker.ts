@@ -1,5 +1,13 @@
 import { importRecipe, NetworkError, verifyUser } from '../shared/api';
-import { getQueue, getSettings, pushHistory, setQueue } from '../shared/storage';
+import { BACKEND_ENABLED } from '../shared/config';
+import {
+  getLocalRecipes,
+  getQueue,
+  getSettings,
+  pushHistory,
+  saveLocalRecipe,
+  setQueue,
+} from '../shared/storage';
 import type { ExtractedRecipe, Message, QueuedSave, SaveResult } from '../shared/types';
 
 const RETRY_ALARM = 'pepper-retry-queue';
@@ -47,8 +55,9 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
 async function handleSave(recipe: ExtractedRecipe): Promise<SaveResult> {
   const settings = await getSettings();
   if (!settings.userId) {
-    return { status: 'error', error: 'Not connected — open the Pepper popup to connect.' };
+    return { status: 'error', error: 'Enter your secret code in the Pepper popup first.' };
   }
+  if (!BACKEND_ENABLED) return handleLocalSave(recipe);
   try {
     const result = await importRecipe(settings.userId, recipe, settings.apiBaseUrl);
     if (result.status === 'saved' || result.status === 'duplicate') {
@@ -67,6 +76,18 @@ async function handleSave(recipe: ExtractedRecipe): Promise<SaveResult> {
     }
     return { status: 'error', error: 'Unexpected error saving recipe.' };
   }
+}
+
+/**
+ * Frontend-only mode (BACKEND_ENABLED = false): keep the fully-extracted recipe
+ * in chrome.storage.local, deduped by URL, ready to sync when the backend ships.
+ */
+async function handleLocalSave(recipe: ExtractedRecipe): Promise<SaveResult> {
+  const existing = await getLocalRecipes();
+  if (existing[recipe.sourceUrl]) return { status: 'duplicate' };
+  await saveLocalRecipe({ recipe, savedAt: Date.now() });
+  await pushHistory({ title: recipe.title, sourceUrl: recipe.sourceUrl, savedAt: Date.now() });
+  return { status: 'saved' };
 }
 
 async function enqueue(recipe: ExtractedRecipe, userId: string): Promise<void> {

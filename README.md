@@ -11,7 +11,7 @@ Full roadmap: [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md).
 | 0 — Scaffold (Vite + CRXJS, TS strict, CI) | ✅ done |
 | 1 — Detection + floating button | ✅ done |
 | 2 — Extraction/normalization + fixtures | ✅ done (15 tests) |
-| 3 — Save flow (client side) | ✅ done — **backend Lambdas not built yet** (needs pepper-backend repo) |
+| 3 — Save flow (client side) | ✅ done — running in **frontend-only mode** (`BACKEND_ENABLED = false` in `src/shared/config.ts`): secret code stored without verification, saves kept in `chrome.storage.local`. Flip the flag when the pepper-backend endpoints exist. |
 | 4 — MyRecipes overlay | registry scaffolded in `src/content/competitor.ts`, not wired up |
 | 5 — Collection migration | not started |
 | 7 — Polish & ship | not started |

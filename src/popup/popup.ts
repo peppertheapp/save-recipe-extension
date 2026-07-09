@@ -1,3 +1,4 @@
+import { BACKEND_ENABLED } from '../shared/config';
 import { getHistory, getSettings, updateSettings } from '../shared/storage';
 import type { Message, VerifyResult } from '../shared/types';
 
@@ -29,6 +30,13 @@ connectBtn.addEventListener('click', () => {
   void (async () => {
     const userId = userIdInput.value.trim();
     if (!userId) return;
+    if (!BACKEND_ENABLED) {
+      // Frontend-only mode: store the code without verification. Account
+      // verification switches on with the backend (see shared/config.ts).
+      await updateSettings({ userId });
+      setStatus('Secret code saved ✓', true);
+      return;
+    }
     connectBtn.disabled = true;
     setStatus('Checking…', true);
     const result = await verify(userId);
@@ -37,7 +45,7 @@ connectBtn.addEventListener('click', () => {
       await updateSettings({ userId });
       setStatus(`Connected as ${result.displayName ?? userId} ✓`, true);
     } else {
-      setStatus(result.error ?? 'User ID not found.', false);
+      setStatus(result.error ?? 'Secret code not found.', false);
     }
   })();
 });
@@ -57,9 +65,13 @@ async function init(): Promise<void> {
 
   if (settings.userId) {
     userIdInput.value = settings.userId;
-    const result = await verify(settings.userId);
-    if (result.valid) setStatus(`Connected as ${result.displayName ?? settings.userId} ✓`, true);
-    else setStatus('Connection needs attention — reconnect.', false);
+    if (!BACKEND_ENABLED) {
+      setStatus('Secret code saved ✓', true);
+    } else {
+      const result = await verify(settings.userId);
+      if (result.valid) setStatus(`Connected as ${result.displayName ?? settings.userId} ✓`, true);
+      else setStatus('Connection needs attention — reconnect.', false);
+    }
   }
 
   const history = await getHistory();

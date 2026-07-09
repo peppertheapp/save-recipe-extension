@@ -42,3 +42,23 @@ export async function pushHistory(entry: SaveHistoryEntry): Promise<void> {
   history.unshift(entry);
   await chrome.storage.local.set({ [HISTORY_KEY]: history.slice(0, HISTORY_LIMIT) });
 }
+
+// ---- Frontend-only mode (BACKEND_ENABLED = false): full recipes stored locally ----
+
+const LOCAL_RECIPES_KEY = 'localRecipes';
+
+export interface LocalRecipeEntry {
+  recipe: import('./types').ExtractedRecipe;
+  savedAt: number;
+}
+
+export async function getLocalRecipes(): Promise<Record<string, LocalRecipeEntry>> {
+  const { [LOCAL_RECIPES_KEY]: recipes } = await chrome.storage.local.get(LOCAL_RECIPES_KEY);
+  return (recipes as Record<string, LocalRecipeEntry> | undefined) ?? {};
+}
+
+export async function saveLocalRecipe(entry: LocalRecipeEntry): Promise<void> {
+  const recipes = await getLocalRecipes();
+  recipes[entry.recipe.sourceUrl] = entry;
+  await chrome.storage.local.set({ [LOCAL_RECIPES_KEY]: recipes });
+}
