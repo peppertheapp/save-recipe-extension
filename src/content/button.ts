@@ -1,8 +1,7 @@
-export type ButtonState = 'green' | 'red' | 'saving' | 'saved' | 'duplicate' | 'error';
+export type ButtonState = 'green' | 'saving' | 'saved' | 'duplicate' | 'error';
 
 export interface ButtonCallbacks {
   onSave: () => void;
-  onSaveAnyway: () => void;
   onPositionChange: (pos: { right: number; bottom: number }) => void;
 }
 
@@ -11,6 +10,16 @@ const PEPPER_SVG = `
   <path d="M13.5 5.5c0-1.5 1-2.5 2.5-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
   <path d="M12 22c-4.5 0-8-3.5-8-8.5C4 9 7 6.5 10.5 6.5c1.2 0 2.2.3 3 .8.8-.5 1.8-.8 3-.8C18.5 6.5 20 9 20 12c0 5.5-3.5 10-8 10z" fill="currentColor"/>
 </svg>`;
+
+/**
+ * Brand logo shown on the green circle. Drop the real logo (white mark,
+ * transparent background) at public/icons/button-logo.png and rebuild;
+ * if the file is missing the inline pepper SVG is used instead.
+ */
+function logoMarkup(): string {
+  const url = chrome.runtime.getURL('icons/button-logo.png');
+  return `<img class="logo" src="${url}" alt="" />`;
+}
 
 const STYLES = `
 :host { all: initial; }
@@ -27,10 +36,10 @@ const STYLES = `
   transition: transform .15s ease, background .2s ease, opacity .2s ease;
   color: #fff;
 }
-.btn svg { width: 26px; height: 26px; }
+.btn svg, .btn img.logo { width: 26px; height: 26px; }
+.btn img.logo { object-fit: contain; }
 .btn:hover { transform: scale(1.08); }
 .btn.green { background: #1db954; }
-.btn.red { background: #d93025; opacity: .55; }
 .btn.saving { background: #1db954; }
 .btn.saved, .btn.duplicate { background: #1db954; }
 .btn.error { background: #d93025; animation: shake .4s; }
@@ -65,7 +74,7 @@ export class PepperButton {
   private wrap: HTMLElement;
   private btn: HTMLButtonElement;
   private label: HTMLElement;
-  private state: ButtonState = 'red';
+  private state: ButtonState = 'green';
   private callbacks: ButtonCallbacks;
   private resetTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -81,7 +90,7 @@ export class PepperButton {
     this.wrap = document.createElement('div');
     this.wrap.className = 'wrap';
     this.btn = document.createElement('button');
-    this.btn.className = 'btn red';
+    this.btn.className = 'btn green';
     this.btn.setAttribute('aria-label', 'Save to Pepper');
     this.label = document.createElement('div');
     this.label.className = 'label hoverable';
@@ -96,7 +105,17 @@ export class PepperButton {
     const pos = position ?? { right: 20, bottom: 20 };
     this.wrap.style.right = `${pos.right}px`;
     this.wrap.style.bottom = `${pos.bottom}px`;
+    this.host.style.display = 'none'; // hidden until a recipe is detected
     document.documentElement.appendChild(this.host);
+  }
+
+  /** The button only exists on pages where there's something to save. */
+  show(): void {
+    this.host.style.display = '';
+  }
+
+  hide(): void {
+    this.host.style.display = 'none';
   }
 
   destroy(): void {
@@ -122,12 +141,9 @@ export class PepperButton {
   private renderFace(message?: string): void {
     switch (this.state) {
       case 'green':
-        this.btn.innerHTML = PEPPER_SVG;
+        this.btn.innerHTML = logoMarkup();
+        this.attachLogoFallback();
         this.setLabel('Save to Pepper');
-        break;
-      case 'red':
-        this.btn.innerHTML = PEPPER_SVG;
-        this.setLabel('No recipe found on this page');
         break;
       case 'saving':
         this.btn.innerHTML = '<div class="spinner"></div>';
@@ -153,20 +169,12 @@ export class PepperButton {
     this.label.className = `label ${forced ? 'forced' : 'hoverable'}`;
   }
 
-  /** Red-state click: offer the server-fallback "save the link anyway" path. */
-  private showSaveAnywayPrompt(): void {
-    this.label.textContent = 'No recipe found on this page — ';
-    const anyway = document.createElement('button');
-    anyway.textContent = 'save the link anyway?';
-    anyway.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.callbacks.onSaveAnyway();
+  /** Missing/unloadable logo file falls back to the inline pepper mark. */
+  private attachLogoFallback(): void {
+    const img = this.btn.querySelector('img.logo');
+    img?.addEventListener('error', () => {
+      this.btn.innerHTML = PEPPER_SVG;
     });
-    this.label.appendChild(anyway);
-    this.label.className = 'label forced';
-    setTimeout(() => {
-      if (this.label.className.includes('forced')) this.setState(this.state);
-    }, 6000);
   }
 
   private attachInteractions(): void {
@@ -212,7 +220,6 @@ export class PepperButton {
         return;
       }
       if (this.state === 'green') this.callbacks.onSave();
-      else if (this.state === 'red') this.showSaveAnywayPrompt();
     });
   }
 }

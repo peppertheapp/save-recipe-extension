@@ -1,5 +1,7 @@
 import { detectRecipe } from './detector';
+import { detectSocialRecipe } from './social';
 import { PepperButton } from './button';
+import { CompetitorOverlay, targetsForHost } from './competitor';
 import { getSettings, updateSettings } from '../shared/storage';
 import type { ExtractedRecipe, Message, SaveResult } from '../shared/types';
 
@@ -11,49 +13,51 @@ function send<M extends Message>(message: M): Promise<SaveResult> {
   return chrome.runtime.sendMessage(message);
 }
 
-async function handleSave(recipe: ExtractedRecipe): Promise<void> {
-  if (!button) return;
-  button.setState('saving');
+async function saveCurrentRecipe(): Promise<SaveResult> {
+  if (!currentRecipe) return { status: 'error', error: 'No recipe on this page.' };
   try {
-    const result = await send({ type: 'SAVE_RECIPE', recipe });
-    switch (result.status) {
-      case 'saved':
-        button.setState('saved');
-        break;
-      case 'duplicate':
-        button.setState('duplicate');
-        break;
-      case 'queued':
-        button.setState('error', 'Offline — queued, will retry');
-        break;
-      case 'error':
-        button.setState('error', result.error);
-        break;
-    }
+    return await send({ type: 'SAVE_RECIPE', recipe: currentRecipe });
   } catch {
-    button.setState('error', 'Could not reach Pepper');
+    return { status: 'error', error: 'Could not reach Pepper' };
   }
 }
 
-function urlOnlyRecipe(): ExtractedRecipe {
-  return {
-    sourceUrl: location.href,
-    title: document.title,
-    ingredients: [],
-    instructions: [],
-    extractionMethod: 'server',
-  };
+async function handleFloatingSave(): Promise<void> {
+  if (!button) return;
+  button.setState('saving');
+  const result = await saveCurrentRecipe();
+  switch (result.status) {
+    case 'saved':
+      button.setState('saved');
+      break;
+    case 'duplicate':
+      button.setState('duplicate');
+      break;
+    case 'queued':
+      button.setState('error', 'Offline — queued, will retry');
+      break;
+    case 'error':
+      button.setState('error', result.error);
+      break;
+  }
 }
 
 function runDetection(): void {
-  const recipe = detectRecipe(document, location.href);
+  // Structured data first; social captions (IG/TikTok/FB/Pinterest) as fallback.
+  const recipe = detectRecipe(document, location.href) ?? detectSocialRecipe(document, location.href);
   // Only react when the outcome meaningfully changes (SPA observers fire a lot).
   const signature = recipe ? `${location.href}::${recipe.title}` : `${location.href}::none`;
   if (signature === lastSignature) return;
   lastSignature = signature;
   currentRecipe = recipe;
 
-  button?.setState(recipe ? 'green' : 'red');
+  // No recipe → no button. It only exists when there's something to save.
+  if (recipe) {
+    button?.setState('green');
+    button?.show();
+  } else {
+    button?.hide();
+  }
   void send({ type: 'DETECTION_CHANGED', hasRecipe: recipe !== null }).catch(() => {
     /* service worker may be waking up; badge will catch up on next change */
   });
@@ -89,13 +93,22 @@ async function main(): Promise<void> {
   const settings = await getSettings();
 
   button = new PepperButton({
-    onSave: () => {
-      if (currentRecipe) void handleSave(currentRecipe);
-    },
-    onSaveAnyway: () => void handleSave(urlOnlyRecipe()),
+    onSave: () => void handleFloatingSave(),
     onPositionChange: (pos) => void updateSettings({ buttonPosition: pos }),
   });
   button.mount(settings.buttonPosition);
+
+  // MyRecipes-network sites: Pepper's save button overlays theirs.
+  const competitorTarget = targetsForHost(location.hostname);
+  if (competitorTarget) {
+    const overlay = new CompetitorOverlay(competitorTarget, async () => {
+      const result = await saveCurrentRecipe();
+      if (result.status === 'saved' || result.status === 'queued') return 'saved';
+      if (result.status === 'duplicate') return 'duplicate';
+      return 'error';
+    });
+    overlay.start();
+  }
 
   runDetection();
   watchForChanges();

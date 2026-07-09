@@ -30,6 +30,14 @@ when submitting. Keep this in sync with what's actually submitted.
 >
 > Connect the extension with the secret code from your Pepper app
 > (Settings → Connect browser extension) and start collecting.
+>
+> Note: on some supported recipe sites, Pepper shows its own clearly-branded
+> save button in place of the site's save button.
+
+> ⚠️ The v1.0.0 zip submitted 2026-07-09 does NOT include the MyRecipes
+> overlay or social capture — those were built after submission. The next
+> uploaded version includes them, and its listing description MUST contain
+> the replacement disclosure above (CWS deceptive-behavior policy).
 
 **Category:** Food & Drink (fallback: Productivity → Tools)
 
