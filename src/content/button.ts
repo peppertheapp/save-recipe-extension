@@ -3,7 +3,6 @@ export type ButtonState = 'green' | 'red' | 'saving' | 'saved' | 'duplicate' | '
 export interface ButtonCallbacks {
   onSave: () => void;
   onSaveAnyway: () => void;
-  onHideSite: () => void;
   onPositionChange: (pos: { right: number; bottom: number }) => void;
 }
 
@@ -59,17 +58,6 @@ const STYLES = `
   margin-left: 8px; background: #1db954; color: #fff; border: none;
   border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer;
 }
-.menu {
-  position: absolute; right: 0; bottom: 60px;
-  background: #fff; color: #222; border-radius: 8px;
-  box-shadow: 0 4px 18px rgba(0,0,0,.25); overflow: hidden;
-}
-.menu button {
-  display: block; width: 100%; border: none; background: none;
-  padding: 10px 14px; font-size: 13px; cursor: pointer; text-align: left;
-  white-space: nowrap;
-}
-.menu button:hover { background: #f2f2f2; }
 `;
 
 export class PepperButton {
@@ -77,7 +65,6 @@ export class PepperButton {
   private wrap: HTMLElement;
   private btn: HTMLButtonElement;
   private label: HTMLElement;
-  private menu: HTMLElement | null = null;
   private state: ButtonState = 'red';
   private callbacks: ButtonCallbacks;
   private resetTimer: ReturnType<typeof setTimeout> | null = null;
@@ -224,34 +211,8 @@ export class PepperButton {
         });
         return;
       }
-      this.closeMenu();
       if (this.state === 'green') this.callbacks.onSave();
       else if (this.state === 'red') this.showSaveAnywayPrompt();
     });
-
-    this.btn.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.toggleMenu();
-    });
-  }
-
-  private toggleMenu(): void {
-    if (this.menu) {
-      this.closeMenu();
-      return;
-    }
-    this.menu = document.createElement('div');
-    this.menu.className = 'menu';
-    const hide = document.createElement('button');
-    hide.textContent = `Hide Pepper on ${location.hostname}`;
-    hide.addEventListener('click', () => this.callbacks.onHideSite());
-    this.menu.appendChild(hide);
-    this.wrap.appendChild(this.menu);
-  }
-
-  private closeMenu(): void {
-    this.menu?.remove();
-    this.menu = null;
   }
 }

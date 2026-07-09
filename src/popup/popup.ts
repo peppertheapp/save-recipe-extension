@@ -11,8 +11,6 @@ const $ = <T extends HTMLElement>(id: string): T => {
 const userIdInput = $<HTMLInputElement>('user-id');
 const connectBtn = $<HTMLButtonElement>('connect');
 const connectStatus = $('connect-status');
-const replaceCompetitor = $<HTMLInputElement>('replace-competitor');
-const apiUrlInput = $<HTMLInputElement>('api-url');
 const historyList = $<HTMLUListElement>('history');
 const historyEmpty = $('history-empty');
 
@@ -50,18 +48,8 @@ connectBtn.addEventListener('click', () => {
   })();
 });
 
-replaceCompetitor.addEventListener('change', () => {
-  void updateSettings({ replaceCompetitorButtons: replaceCompetitor.checked });
-});
-
-apiUrlInput.addEventListener('change', () => {
-  void updateSettings({ apiBaseUrl: apiUrlInput.value.trim() });
-});
-
 async function init(): Promise<void> {
   const settings = await getSettings();
-  replaceCompetitor.checked = settings.replaceCompetitorButtons;
-  apiUrlInput.value = settings.apiBaseUrl;
 
   if (settings.userId) {
     userIdInput.value = settings.userId;

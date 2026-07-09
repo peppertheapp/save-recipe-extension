@@ -87,21 +87,12 @@ function watchForChanges(): void {
 async function main(): Promise<void> {
   if (window !== window.top) return; // top frames only
   const settings = await getSettings();
-  const hostname = location.hostname;
-  if (settings.hiddenSites.includes(hostname)) return;
 
   button = new PepperButton({
     onSave: () => {
       if (currentRecipe) void handleSave(currentRecipe);
     },
     onSaveAnyway: () => void handleSave(urlOnlyRecipe()),
-    onHideSite: () => {
-      void getSettings().then((s) =>
-        updateSettings({ hiddenSites: [...new Set([...s.hiddenSites, hostname])] }),
-      );
-      button?.destroy();
-      button = null;
-    },
     onPositionChange: (pos) => void updateSettings({ buttonPosition: pos }),
   });
   button.mount(settings.buttonPosition);

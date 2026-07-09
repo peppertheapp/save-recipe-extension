@@ -37,21 +37,16 @@ export interface VerifyResult {
 }
 
 export interface Settings {
+  /** The Pepper "secret code" the user pastes from the app (their user id). */
   userId: string | null;
-  /** Phase 4: replace MyRecipes-network save buttons with Pepper's. */
-  replaceCompetitorButtons: boolean;
-  /** Hostnames where the floating button is hidden. */
-  hiddenSites: string[];
   /** Persisted floating-button position (CSS right/bottom offsets in px). */
   buttonPosition: { right: number; bottom: number } | null;
-  /** Override for dev/staging; empty string means the production default. */
+  /** Dev/staging override, set via console only; empty string = production. */
   apiBaseUrl: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   userId: null,
-  replaceCompetitorButtons: true,
-  hiddenSites: [],
   buttonPosition: null,
   apiBaseUrl: '',
 };
