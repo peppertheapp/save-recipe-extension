@@ -5,21 +5,7 @@ export interface ButtonCallbacks {
   onPositionChange: (pos: { right: number; bottom: number }) => void;
 }
 
-const PEPPER_SVG = `
-<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <path d="M13.5 5.5c0-1.5 1-2.5 2.5-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-  <path d="M12 22c-4.5 0-8-3.5-8-8.5C4 9 7 6.5 10.5 6.5c1.2 0 2.2.3 3 .8.8-.5 1.8-.8 3-.8C18.5 6.5 20 9 20 12c0 5.5-3.5 10-8 10z" fill="currentColor"/>
-</svg>`;
-
-/**
- * Brand logo shown on the green circle. Drop the real logo (white mark,
- * transparent background) at public/icons/button-logo.png and rebuild;
- * if the file is missing the inline pepper SVG is used instead.
- */
-function logoMarkup(): string {
-  const url = chrome.runtime.getURL('icons/button-logo.png');
-  return `<img class="logo" src="${url}" alt="" />`;
-}
+import { PEPPER_LOGO_SVG } from './logo';
 
 const STYLES = `
 :host { all: initial; }
@@ -36,8 +22,7 @@ const STYLES = `
   transition: transform .15s ease, background .2s ease, opacity .2s ease;
   color: #fff;
 }
-.btn svg, .btn img.logo { width: 26px; height: 26px; }
-.btn img.logo { object-fit: contain; }
+.btn svg { width: 30px; height: 30px; }
 .btn:hover { transform: scale(1.08); }
 .btn.green { background: #1db954; }
 .btn.saving { background: #1db954; }
@@ -141,8 +126,7 @@ export class PepperButton {
   private renderFace(message?: string): void {
     switch (this.state) {
       case 'green':
-        this.btn.innerHTML = logoMarkup();
-        this.attachLogoFallback();
+        this.btn.innerHTML = PEPPER_LOGO_SVG;
         this.setLabel('Save to Pepper');
         break;
       case 'saving':
@@ -167,14 +151,6 @@ export class PepperButton {
   private setLabel(text: string, forced = false): void {
     this.label.textContent = text;
     this.label.className = `label ${forced ? 'forced' : 'hoverable'}`;
-  }
-
-  /** Missing/unloadable logo file falls back to the inline pepper mark. */
-  private attachLogoFallback(): void {
-    const img = this.btn.querySelector('img.logo');
-    img?.addEventListener('error', () => {
-      this.btn.innerHTML = PEPPER_SVG;
-    });
   }
 
   private attachInteractions(): void {
