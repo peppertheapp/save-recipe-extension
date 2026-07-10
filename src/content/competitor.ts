@@ -6,10 +6,21 @@
  * Store listing (see docs/STORE_LISTING.md before shipping updates).
  */
 
+interface CompetitorSelector {
+  selector: string;
+  /**
+   * 'self': the match IS the save control/container — cover it directly.
+   * 'closest-control': the match is an inner icon — cover its nearest
+   * button/link ancestor. Never used for containers, because resolving a
+   * card's save div upward would grab the whole recipe card link.
+   */
+  resolve: 'self' | 'closest-control';
+}
+
 export interface CompetitorTarget {
   domains: string[];
-  /** Verified against live allrecipes.com markup 2026-07-09 — these WILL rot; re-check per release. */
-  selectors: string[];
+  /** Verified against live allrecipes.com markup 2026-07-09 (recipe + roundup pages) — these WILL rot; re-check per release. */
+  selectors: CompetitorSelector[];
 }
 
 export const COMPETITOR_TARGETS: CompetitorTarget[] = [
@@ -27,12 +38,23 @@ export const COMPETITOR_TARGETS: CompetitorTarget[] = [
       'marthastewart.com',
     ],
     selectors: [
-      '.mm-recipes-save-button-placeholder',
-      '[data-tracking-subtype="Recipe Save"]',
-      '.save-icon-favorite',
+      // Recipe pages: the hydrating placeholder under the recipe header.
+      { selector: '.mm-recipes-save-button-placeholder', resolve: 'self' },
+      // Roundup/listicle pages: one save container per recipe card.
+      { selector: '.mm-myrecipes-favorite', resolve: 'self' },
+      { selector: '[data-tracking-subtype="Recipe Save"]', resolve: 'self' },
+      { selector: '[data-tracking-subtype$="Save Recipe"]', resolve: 'self' },
+      // Icon-level fallback for older markup.
+      { selector: '.save-icon-favorite', resolve: 'closest-control' },
     ],
   },
 ];
+
+/** A roundup-card save button points at a different recipe than the page itself. */
+export interface CardRecipeRef {
+  url: string;
+  title: string | null;
+}
 
 export function targetsForHost(hostname: string): CompetitorTarget | undefined {
   return COMPETITOR_TARGETS.find((t) =>
@@ -66,11 +88,24 @@ const OVERLAY_STYLES = `
 .overlay svg, .overlay img { width: 18px; height: 18px; }
 `;
 
-type OverlaySaveHandler = () => Promise<'saved' | 'duplicate' | 'error'>;
+type OverlaySaveHandler = (card: CardRecipeRef | null) => Promise<'saved' | 'duplicate' | 'error'>;
 
 interface Covered {
   target: Element;
   button: HTMLButtonElement;
+}
+
+/**
+ * On roundup pages each save container carries the card's recipe URL + title
+ * in tracking attributes. Absent (recipe pages) → null → save the page itself.
+ */
+export function cardRecipeFor(target: Element, pageUrl: string): CardRecipeRef | null {
+  const carrier = target.closest('[data-tracking-target-url]');
+  const url = carrier?.getAttribute('data-tracking-target-url')?.trim();
+  if (!url || !/^https?:\/\//.test(url)) return null;
+  const canonical = (u: string): string => u.split('#')[0]?.split('?')[0] ?? u;
+  if (canonical(url) === canonical(pageUrl)) return null;
+  return { url, title: carrier?.getAttribute('data-tracking-metadata-label')?.trim() || null };
 }
 
 export class CompetitorOverlay {
@@ -79,7 +114,7 @@ export class CompetitorOverlay {
   private shadow: ShadowRoot;
   private covered: Covered[] = [];
   private seen = new WeakSet<Element>();
-  private selectors: string[];
+  private selectors: CompetitorSelector[];
   private rescanTimer: ReturnType<typeof setTimeout> | null = null;
   private repositionQueued = false;
 
@@ -118,7 +153,7 @@ export class CompetitorOverlay {
   }
 
   private scan(): void {
-    for (const selector of this.selectors) {
+    for (const { selector, resolve } of this.selectors) {
       let matches: NodeListOf<Element>;
       try {
         matches = document.querySelectorAll(selector);
@@ -126,8 +161,10 @@ export class CompetitorOverlay {
         continue;
       }
       for (const match of matches) {
-        // Icon-level matches resolve up to the clickable control.
-        const target = match.closest('button, a, [role="button"]') ?? match;
+        const target =
+          resolve === 'closest-control'
+            ? (match.closest('button, a, [role="button"]') ?? match)
+            : match;
         if (this.seen.has(target)) continue;
         this.seen.add(target);
         this.cover(target);
@@ -143,7 +180,7 @@ export class CompetitorOverlay {
     button.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      void this.handleClick(button);
+      void this.handleClick(button, cardRecipeFor(target, location.href));
     });
     this.shadow.appendChild(button);
     this.covered.push({ target, button });
@@ -151,9 +188,9 @@ export class CompetitorOverlay {
     this.reposition();
   }
 
-  private async handleClick(button: HTMLButtonElement): Promise<void> {
+  private async handleClick(button: HTMLButtonElement, card: CardRecipeRef | null): Promise<void> {
     this.renderLabel(button, 'Saving…');
-    const result = await this.onSave();
+    const result = await this.onSave(card);
     this.renderLabel(
       button,
       result === 'saved' ? '✓ Saved' : result === 'duplicate' ? '✓ Already saved' : 'Try again',

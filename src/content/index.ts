@@ -1,7 +1,7 @@
 import { detectRecipe } from './detector';
 import { detectSocialRecipe } from './social';
 import { PepperButton } from './button';
-import { CompetitorOverlay, targetsForHost } from './competitor';
+import { CompetitorOverlay, targetsForHost, type CardRecipeRef } from './competitor';
 import { getSettings, updateSettings } from '../shared/storage';
 import type { ExtractedRecipe, Message, SaveResult } from '../shared/types';
 
@@ -101,8 +101,21 @@ async function main(): Promise<void> {
   // MyRecipes-network sites: Pepper's save button overlays theirs.
   const competitorTarget = targetsForHost(location.hostname);
   if (competitorTarget) {
-    const overlay = new CompetitorOverlay(competitorTarget, async () => {
-      const result = await saveCurrentRecipe();
+    const overlay = new CompetitorOverlay(competitorTarget, async (card: CardRecipeRef | null) => {
+      // Roundup-card buttons save their own recipe (URL stub, extracted
+      // server-side later); recipe-page buttons save the detected recipe.
+      const result = card
+        ? await send({
+            type: 'SAVE_RECIPE',
+            recipe: {
+              sourceUrl: card.url,
+              title: card.title ?? card.url,
+              ingredients: [],
+              instructions: [],
+              extractionMethod: 'server',
+            },
+          }).catch((): SaveResult => ({ status: 'error', error: 'Could not reach Pepper' }))
+        : await saveCurrentRecipe();
       if (result.status === 'saved' || result.status === 'queued') return 'saved';
       if (result.status === 'duplicate') return 'duplicate';
       return 'error';
