@@ -49,8 +49,15 @@ function send<M extends Message>(message: M): Promise<SaveResult> {
 
 async function saveCurrentRecipe(): Promise<SaveResult> {
   if (!currentRecipe) return { status: 'error', error: 'No recipe on this page.' };
+  // Some sites (e.g. provecho.co) publish Recipe JSON-LD with empty
+  // ingredients/instructions to gate content. Flag those saves for
+  // server-side re-extraction instead of storing them as complete.
+  const recipe: ExtractedRecipe =
+    currentRecipe.ingredients.length === 0 && currentRecipe.instructions.length === 0
+      ? { ...currentRecipe, extractionMethod: 'server' }
+      : currentRecipe;
   try {
-    return await send({ type: 'SAVE_RECIPE', recipe: currentRecipe });
+    return await send({ type: 'SAVE_RECIPE', recipe });
   } catch {
     return { status: 'error', error: 'Could not reach Pepper' };
   }
