@@ -279,7 +279,31 @@ export class CompetitorOverlay {
     button.title = text;
   }
 
+  /**
+   * Is the target actually the topmost thing at its center? Stacked layouts
+   * (carousel card decks) keep hidden cards' save buttons in the DOM with
+   * real rects — covering those paints phantom buttons. Our own layer is
+   * made hit-transparent for the probe so it never occludes.
+   */
+  private isOccluded(target: Element, rect: DOMRect): boolean {
+    const topEl = document.elementFromPoint(
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2,
+    );
+    if (!topEl) return true; // offscreen
+    return !(target.contains(topEl) || topEl.contains(target));
+  }
+
   private reposition(): void {
+    this.host.style.pointerEvents = 'none'; // exclude our overlays from elementFromPoint
+    try {
+      this.repositionAll();
+    } finally {
+      this.host.style.pointerEvents = '';
+    }
+  }
+
+  private repositionAll(): void {
     for (const covered of this.covered) {
       const { target, button } = covered;
       if (!target.isConnected) {
@@ -287,7 +311,7 @@ export class CompetitorOverlay {
         continue;
       }
       const rect = controlRect(target);
-      if (rect.width < 8 || rect.height < 8) {
+      if (rect.width < 8 || rect.height < 8 || this.isOccluded(target, rect)) {
         button.classList.remove('visible');
         continue;
       }
