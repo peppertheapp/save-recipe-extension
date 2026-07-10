@@ -24,6 +24,12 @@ describe('targetsForHost', () => {
     expect(targetsForHost('www.allrecipes.com')).toBeDefined();
     expect(targetsForHost('allrecipes.com')).toBeDefined();
     expect(targetsForHost('www.eatingwell.com')).toBeDefined();
+    expect(targetsForHost('www.seriouseats.com')).toBeDefined();
+    expect(targetsForHost('www.simplyrecipes.com')).toBeDefined();
+    expect(targetsForHost('www.thespruceeats.com')).toBeDefined();
+    expect(targetsForHost('www.foodandwine.com')).toBeDefined();
+    expect(targetsForHost('www.liquor.com')).toBeDefined();
+    expect(targetsForHost('www.myrecipes.com')).toBeDefined();
     expect(targetsForHost('smittenkitchen.com')).toBeUndefined();
     expect(targetsForHost('notallrecipes.com')).toBeUndefined();
   });

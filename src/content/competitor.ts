@@ -42,6 +42,8 @@ export const COMPETITOR_TARGETS: CompetitorTarget[] = [
       'realsimple.com',
       'southernliving.com',
       'marthastewart.com',
+      'liquor.com',
+      'myrecipes.com',
     ],
     selectors: [
       // Recipe pages: the hydrating placeholder under the recipe header.
