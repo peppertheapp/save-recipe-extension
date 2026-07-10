@@ -71,6 +71,7 @@ export function targetsForHost(hostname: string): CompetitorTarget | undefined {
 }
 
 import { createLogoNode } from './logo';
+import { burstConfettiFrom } from './confetti';
 
 const OVERLAY_STYLES = `
 :host { all: initial; }
@@ -234,6 +235,7 @@ export class CompetitorOverlay {
       covered,
       result === 'saved' ? '✓ Saved' : result === 'duplicate' ? '✓ Already saved' : 'Try again',
     );
+    if (result === 'saved') burstConfettiFrom(covered.button);
     setTimeout(() => this.renderLabel(covered, 'Save to Pepper'), 2000);
   }
 

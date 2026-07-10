@@ -6,6 +6,7 @@ export interface ButtonCallbacks {
 }
 
 import { renderLogo } from './logo';
+import { burstConfettiFrom } from './confetti';
 
 const STYLES = `
 :host { all: initial; }
@@ -117,6 +118,7 @@ export class PepperButton {
     this.btn.className = `btn ${state}`;
     this.label.classList.remove('forced');
     this.renderFace(message);
+    if (state === 'saved') burstConfettiFrom(this.btn);
 
     // Transient states fall back to the underlying detection state after 2s.
     if (state === 'saved' || state === 'duplicate' || state === 'error') {
