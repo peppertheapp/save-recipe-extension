@@ -84,7 +84,7 @@ const OVERLAY_STYLES = `
   background: #1db954;
   color: #fff;
   border: none;
-  border-radius: 8px;
+  border-radius: 0;
   cursor: pointer;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
