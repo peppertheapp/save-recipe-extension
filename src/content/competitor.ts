@@ -21,6 +21,12 @@ export interface CompetitorTarget {
   domains: string[];
   /** Verified against live allrecipes.com markup 2026-07-09 (recipe + roundup pages) — these WILL rot; re-check per release. */
   selectors: CompetitorSelector[];
+  /**
+   * Never cover an element inside these. Site navigation ("My Saves" links to
+   * the user's saved-recipes page) must stay clickable — it's the entry point
+   * for the Phase 5 collection import.
+   */
+  exclude: string;
 }
 
 export const COMPETITOR_TARGETS: CompetitorTarget[] = [
@@ -47,6 +53,8 @@ export const COMPETITOR_TARGETS: CompetitorTarget[] = [
       // Icon-level fallback for older markup.
       { selector: '.save-icon-favorite', resolve: 'closest-control' },
     ],
+    // Header/utility nav ("My Saves" → user's saved list) and login triggers.
+    exclude: 'nav, .mntl-utility-nav, .myr-login-trigger, [aria-label="Go to MyRecipes"]',
   },
 ];
 
@@ -115,12 +123,14 @@ export class CompetitorOverlay {
   private covered: Covered[] = [];
   private seen = new WeakSet<Element>();
   private selectors: CompetitorSelector[];
+  private exclude: string;
   private rescanTimer: ReturnType<typeof setTimeout> | null = null;
   private repositionQueued = false;
 
   constructor(target: CompetitorTarget, onSave: OverlaySaveHandler) {
     this.onSave = onSave;
     this.selectors = target.selectors;
+    this.exclude = target.exclude;
     this.host = document.createElement('pepper-competitor-overlay');
     this.shadow = this.host.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
@@ -167,6 +177,7 @@ export class CompetitorOverlay {
             : match;
         if (this.seen.has(target)) continue;
         this.seen.add(target);
+        if (this.exclude && target.closest(this.exclude)) continue; // e.g. "My Saves" nav
         this.cover(target);
       }
     }

@@ -42,6 +42,38 @@ describe('roundup selectors', () => {
   });
 });
 
+describe('nav exclusion', () => {
+  // Live header markup: the "My Saves" nav link contains the same heart icon
+  // class as save buttons. It must never be covered (regression: we covered it).
+  const NAV_HTML = `
+    <ul class="mntl-utility-nav">
+      <li><a class="mntl-utility-nav__sublist-link myr-login-trigger" aria-label="Go to MyRecipes" href="/account/my-saves">
+        <svg class="icon save-icon-favorite icon-myr-favorite"></svg> My Saves
+      </a></li>
+    </ul>
+    <div class="mm-myrecipes-favorite" data-tracking-subtype="Card #1|Save Recipe"
+      data-tracking-target-url="https://www.allrecipes.com/recipe/1/x/"></div>`;
+
+  it('excludes nav "My Saves" but keeps real save buttons', () => {
+    const doc = parse(NAV_HTML);
+    const target = COMPETITOR_TARGETS[0]!;
+    const covered: Element[] = [];
+    for (const { selector, resolve } of target.selectors) {
+      for (const match of doc.querySelectorAll(selector)) {
+        const el =
+          resolve === 'closest-control'
+            ? (match.closest('button, a, [role="button"]') ?? match)
+            : match;
+        if (covered.includes(el)) continue;
+        if (el.closest(target.exclude)) continue;
+        covered.push(el);
+      }
+    }
+    expect(covered).toHaveLength(1);
+    expect(covered[0]!.className).toContain('mm-myrecipes-favorite');
+  });
+});
+
 describe('cardRecipeFor', () => {
   const pageUrl = 'https://www.allrecipes.com/tiktok-recipes-8422099';
 
