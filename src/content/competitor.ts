@@ -95,6 +95,8 @@ const OVERLAY_STYLES = `
   box-shadow: 0 2px 8px rgba(0,0,0,.2);
 }
 .overlay.visible { display: flex; }
+/* Icon-only overlays float over card photos — round them for a softer look. */
+.overlay.rounded { border-radius: 8px; }
 .overlay:hover { filter: brightness(1.05); }
 .overlay svg, .overlay img { width: 18px; height: 18px; flex: none; }
 .overlay span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -262,6 +264,7 @@ export class CompetitorOverlay {
   private renderLabel(covered: Covered, text: string): void {
     const { button, mode } = covered;
     covered.text = text;
+    button.classList.toggle('rounded', mode === 'icon');
     button.replaceChildren(createLogoNode());
     if (mode !== 'icon') {
       const span = document.createElement('span');
