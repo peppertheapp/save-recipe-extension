@@ -93,14 +93,41 @@ const OVERLAY_STYLES = `
 }
 .overlay.visible { display: flex; }
 .overlay:hover { filter: brightness(1.05); }
-.overlay svg, .overlay img { width: 18px; height: 18px; }
+.overlay svg, .overlay img { width: 18px; height: 18px; flex: none; }
+.overlay span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.overlay { overflow: hidden; box-sizing: border-box; padding: 0 4px; }
 `;
 
 type OverlaySaveHandler = (card: CardRecipeRef | null) => Promise<'saved' | 'duplicate' | 'error'>;
 
+type LabelMode = 'full' | 'short' | 'icon';
+
 interface Covered {
   target: Element;
   button: HTMLButtonElement;
+  mode: LabelMode;
+  /** Last label text so a mode change can re-render it. */
+  text: string;
+}
+
+/**
+ * The visible control's rect. Placeholder wrappers can be styled smaller than
+ * the button that hydrates inside them — cover whichever is larger.
+ */
+function controlRect(target: Element): DOMRect {
+  let rect = target.getBoundingClientRect();
+  const inner = target.querySelector('button, a, [role="button"]');
+  if (inner) {
+    const innerRect = inner.getBoundingClientRect();
+    if (innerRect.width * innerRect.height > rect.width * rect.height) rect = innerRect;
+  }
+  return rect;
+}
+
+function modeForWidth(width: number): LabelMode {
+  if (width < 80) return 'icon';
+  if (width < 160) return 'short';
+  return 'full';
 }
 
 /**
@@ -187,49 +214,65 @@ export class CompetitorOverlay {
     const button = document.createElement('button');
     button.className = 'overlay';
     button.setAttribute('aria-label', 'Save to Pepper');
-    this.renderLabel(button, 'Save to Pepper');
+    const covered: Covered = { target, button, mode: 'full', text: 'Save to Pepper' };
+    this.renderLabel(covered, 'Save to Pepper');
     button.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      void this.handleClick(button, cardRecipeFor(target, location.href));
+      void this.handleClick(covered, cardRecipeFor(target, location.href));
     });
     this.shadow.appendChild(button);
-    this.covered.push({ target, button });
+    this.covered.push(covered);
     new ResizeObserver(() => this.reposition()).observe(target);
     this.reposition();
   }
 
-  private async handleClick(button: HTMLButtonElement, card: CardRecipeRef | null): Promise<void> {
-    this.renderLabel(button, 'Saving…');
+  private async handleClick(covered: Covered, card: CardRecipeRef | null): Promise<void> {
+    this.renderLabel(covered, 'Saving…');
     const result = await this.onSave(card);
     this.renderLabel(
-      button,
+      covered,
       result === 'saved' ? '✓ Saved' : result === 'duplicate' ? '✓ Already saved' : 'Try again',
     );
-    setTimeout(() => this.renderLabel(button, 'Save to Pepper'), 2000);
+    setTimeout(() => this.renderLabel(covered, 'Save to Pepper'), 2000);
   }
 
-  private renderLabel(button: HTMLButtonElement, text: string): void {
-    const compact = button.offsetWidth > 0 && button.offsetWidth < 110;
+  private renderLabel(covered: Covered, text: string): void {
+    const { button, mode } = covered;
+    covered.text = text;
     button.replaceChildren(createLogoNode());
-    if (!compact) {
+    if (mode !== 'icon') {
       const span = document.createElement('span');
-      span.textContent = text;
+      // Narrow targets get the short forms so the label never wraps.
+      span.textContent =
+        mode === 'short'
+          ? text === 'Save to Pepper'
+            ? 'Save'
+            : text === '✓ Already saved'
+              ? '✓ Saved'
+              : text
+          : text;
       button.appendChild(span);
     }
     button.title = text;
   }
 
   private reposition(): void {
-    for (const { target, button } of this.covered) {
+    for (const covered of this.covered) {
+      const { target, button } = covered;
       if (!target.isConnected) {
         button.classList.remove('visible');
         continue;
       }
-      const rect = target.getBoundingClientRect();
+      const rect = controlRect(target);
       if (rect.width < 8 || rect.height < 8) {
         button.classList.remove('visible');
         continue;
+      }
+      const mode = modeForWidth(rect.width);
+      if (mode !== covered.mode) {
+        covered.mode = mode;
+        this.renderLabel(covered, covered.text);
       }
       button.classList.add('visible');
       button.style.top = `${rect.top}px`;
