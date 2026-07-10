@@ -1,3 +1,4 @@
+import { getSettings } from '../shared/storage';
 import type { ExtractedRecipe } from '../shared/types';
 
 /**
@@ -276,6 +277,15 @@ export class MigrationBanner {
 
   private async runImport(): Promise<void> {
     this.importBtn.disabled = true;
+    // The #1 failure cause: not connected (e.g. storage wiped by a reinstall).
+    // Catch it before importing so the user gets a reason, not a failure count.
+    const settings = await getSettings().catch(() => null);
+    if (!settings?.userId) {
+      this.message.textContent =
+        'Connect first: click the Pepper toolbar icon and enter your secret code, then try again.';
+      this.importBtn.disabled = false;
+      return;
+    }
     // API first (complete collection in one call); DOM auto-scroll fallback.
     let links = await fetchBookmarksViaApi();
     if (links.length === 0) {

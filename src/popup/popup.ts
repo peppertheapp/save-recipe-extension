@@ -1,4 +1,13 @@
+import QrCodeWithLogo from 'qrcode-with-logos';
+import { renderSVG } from 'uqr';
 import { BACKEND_ENABLED } from '../shared/config';
+import {
+  checkPairingStatus,
+  generatePairingCode,
+  PAIRING_CODE_ROTATE_MS,
+  PAIRING_POLL_INTERVAL_MS,
+  pairingUrl,
+} from '../shared/pairing';
 import { getHistory, getSettings, updateSettings } from '../shared/storage';
 import type { Message, VerifyResult } from '../shared/types';
 
@@ -11,8 +20,58 @@ const $ = <T extends HTMLElement>(id: string): T => {
 const userIdInput = $<HTMLInputElement>('user-id');
 const connectBtn = $<HTMLButtonElement>('connect');
 const connectStatus = $('connect-status');
+const qrWrap = $('qr-wrap');
 const historyList = $<HTMLUListElement>('history');
 const historyEmpty = $('history-empty');
+
+// ---- QR pairing ----
+
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let rotateTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function showPairingQr(): Promise<void> {
+  const code = generatePairingCode();
+  const content = pairingUrl(code);
+
+  try {
+    // Branded QR (qrcode-with-logos): chili badge in the center, high error
+    // correction so the badge never breaks scanability.
+    const canvas = document.createElement('canvas');
+    await new QrCodeWithLogo({
+      canvas,
+      content,
+      width: 400,
+      nodeQrCodeOptions: { errorCorrectionLevel: 'H', margin: 2 },
+      dotsOptions: { color: '#212121', type: 'rounded' },
+      logo: {
+        src: chrome.runtime.getURL('icons/qr-logo.png'),
+        bgColor: '#ffffff',
+        borderRadius: 100,
+      },
+    }).getCanvas();
+    qrWrap.replaceChildren(canvas);
+  } catch {
+    // Plain QR fallback (uqr) — no canvas/logo, still scannable.
+    qrWrap.innerHTML = renderSVG(content, { ecc: 'M', border: 2 });
+  }
+
+  if (BACKEND_ENABLED) {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(() => {
+      void checkPairingStatus(code).then(async (status) => {
+        if (!status.linked || !status.userId) return;
+        if (pollTimer) clearInterval(pollTimer);
+        if (rotateTimer) clearTimeout(rotateTimer);
+        await updateSettings({ userId: status.userId });
+        setStatus(`Connected as ${status.displayName ?? status.userId} ✓`, true);
+      });
+    }, PAIRING_POLL_INTERVAL_MS);
+  }
+
+  // Rotate the code before its (future) server-side TTL lapses.
+  if (rotateTimer) clearTimeout(rotateTimer);
+  rotateTimer = setTimeout(() => void showPairingQr(), PAIRING_CODE_ROTATE_MS);
+}
 
 function setStatus(text: string, ok: boolean): void {
   connectStatus.textContent = text;
@@ -50,6 +109,7 @@ connectBtn.addEventListener('click', () => {
 
 async function init(): Promise<void> {
   const settings = await getSettings();
+  void showPairingQr();
 
   if (settings.userId) {
     userIdInput.value = settings.userId;

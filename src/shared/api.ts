@@ -3,9 +3,11 @@ import type { ExtractedRecipe, SaveResult, VerifyResult } from './types';
 const PRODUCTION_BASE_URL = 'https://api.peppertheapp.com';
 const EXTENSION_VERSION = chrome.runtime.getManifest().version;
 
-function baseUrl(override: string): string {
+export function resolveBaseUrl(override: string): string {
   return (override || PRODUCTION_BASE_URL).replace(/\/$/, '');
 }
+
+const baseUrl = resolveBaseUrl;
 
 /** Thrown for network-level failures (offline, DNS, timeout) — these are retryable. */
 export class NetworkError extends Error {}
