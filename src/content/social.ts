@@ -79,20 +79,24 @@ function decodeJsonString(body: string): string {
   }
 }
 
-/** Scan inline scripts for `"<key>":{"text":"…"}` payloads (Facebook relay data). */
-function captionFromScriptJson(doc: Document, keys: string[]): string {
+/**
+ * Scan inline scripts for ALL `"<key>":{"text":"…"}` payloads (Facebook relay
+ * data). Feed/reel pages preload sibling posts, so several captions coexist —
+ * callers must disambiguate against the visible DOM.
+ */
+function scriptCaptions(doc: Document, keys: string[]): string[] {
+  const out: string[] = [];
   for (const script of doc.querySelectorAll('script')) {
     const text = script.textContent ?? '';
     for (const key of keys) {
-      const re = new RegExp(`"${key}"\\s*:\\s*\\{\\s*"text"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`);
-      const m = re.exec(text);
-      if (m?.[1]) {
-        const decoded = decodeJsonString(m[1]);
-        if (decoded.length > 20) return decoded;
+      const re = new RegExp(`"${key}"\\s*:\\s*\\{\\s*"text"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`, 'g');
+      for (const m of text.matchAll(re)) {
+        const decoded = decodeJsonString(m[1] ?? '');
+        if (decoded.length > 20 && !out.includes(decoded)) out.push(decoded);
       }
     }
   }
-  return '';
+  return out;
 }
 
 /** Walk parsed JSON for the first long string under a matching key. */
@@ -161,23 +165,50 @@ function extractTikTok(doc: Document, url: string): SocialCapture {
   return { caption: '' };
 }
 
+const normalize = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
+
 function extractFacebook(doc: Document, url: string): SocialCapture {
-  // 1) Relay payloads in inline scripts (reels keep the caption here even
-  //    when the visible DOM shreds it across obfuscated spans).
-  const fromScript = captionFromScriptJson(doc, ['message', 'savable_description']);
-  if (fromScript) return { caption: fromScript };
-  // 2) Caption DOM nodes (feed posts / permalinks).
+  // Visible texts: dedicated caption nodes plus dir="auto" blocks (the one
+  // attribute FB's obfuscation never strips). Truncated ("… See more") is
+  // fine — they're used for matching, not extraction.
+  const visible: string[] = [];
   for (const sel of ['[data-ad-preview="message"]', '[data-testid="post_message"]']) {
     const text = visibleText(doc.querySelector(sel));
-    if (text.length > 20) return { caption: cleanText(text, doc) };
+    if (text.length > 20) visible.push(text);
   }
-  // 3) Longest recipe-looking dir="auto" block (FB text always carries dir=auto).
-  let best = '';
   for (const el of doc.querySelectorAll('div[dir="auto"], span[dir="auto"]')) {
     const text = visibleText(el);
-    if (text.length > best.length && text.length < 5000 && looksLikeRecipe(text)) best = text;
+    if (text.length > 20 && text.length < 5000) visible.push(text);
   }
-  if (best) return { caption: cleanText(best, doc) };
+
+  // 1) Relay payloads hold the FULL caption — but for this reel AND preloaded
+  //    siblings. The active one is whichever also appears on screen; take the
+  //    longest such payload (visible copies are often "See more"-truncated).
+  const candidates = scriptCaptions(doc, ['message', 'savable_description']);
+  let best = '';
+  for (const candidate of candidates) {
+    const head = normalize(candidate).slice(0, 30);
+    const onScreen = visible.some((v) => {
+      const nv = normalize(v);
+      return nv.startsWith(head) || normalize(candidate).startsWith(nv.slice(0, 30));
+    });
+    if (onScreen && candidate.length > best.length) best = candidate;
+  }
+  if (best) return { caption: best };
+
+  // 2) Dedicated caption nodes (feed posts / permalinks).
+  const nodeCaption = visible.find((v, i) => i < 2 && v.length > 20);
+  if (nodeCaption && doc.querySelector('[data-ad-preview="message"], [data-testid="post_message"]')) {
+    return { caption: cleanText(nodeCaption, doc) };
+  }
+
+  // 3) Longest recipe-looking visible block.
+  let fallback = '';
+  for (const text of visible) {
+    if (text.length > fallback.length && looksLikeRecipe(text)) fallback = text;
+  }
+  if (fallback) return { caption: cleanText(fallback, doc) };
+
   // 4) Metas (rare on logged-in FB).
   if (metasAreFresh(doc, url)) {
     const caption = captionFromOgDescription(metaContent(doc, 'og:description'), doc);
@@ -250,6 +281,7 @@ const COOKING_VERB_RE =
 /** Cheap recipe-ish gate so the button doesn't light up on every food photo. */
 export function looksLikeRecipe(text: string): boolean {
   if (/\b(recipe|ingredients?|instructions|directions|method)\b/i.test(text)) return true;
+  if (/#\w*recipe/i.test(text)) return true; // #easyrecipe, #recipeoftheday, …
   const signals =
     (text.match(MEASUREMENT_RE)?.length ?? 0) + (text.match(COOKING_VERB_RE)?.length ?? 0);
   return signals >= 2;

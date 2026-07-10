@@ -101,18 +101,34 @@ describe('detectSocialRecipe — TikTok', () => {
 });
 
 describe('detectSocialRecipe — Facebook', () => {
-  it('reads reel captions from relay script payloads', () => {
-    const payload = `{"data":{"creation_story":{"message":{"text":"Garlic butter prawns recipe \\ud83e\\udd90\\n2 lbs prawns\\n4 tbsp butter\\n6 cloves garlic\\nSaut\\u00e9 garlic in butter, add prawns, cook for 4 minutes."}}}}`;
+  it('picks the on-screen reel caption from relay payloads, not a preloaded sibling', () => {
+    // Modeled on the live reel/1808153320153124 dump: two message payloads in
+    // scripts (active reel + next reel preloaded), active caption visible in
+    // dir="auto" (truncated), comments also visible.
     const doc = docFromHtml(`<!doctype html><html><head>
-      <script>requireLazy(["x"], function() { handle(${payload}); });</script>
-    </head><body></body></html>`);
+      <script>handle({"data":{"message":{"text":"We turned Cajun\\u2019t Chicken into a #onepotmeal! #easymeals"},"other":{"message":{"text":"One Pan Lemon Chicken Pea Pasta! #pasta #onepanmeals #easyrecipe #chicken #lemon\\nHere\\u2019s the grocery list\\n1 lb chicken breast\\n8 oz pasta\\n1 cup peas\\n2 lemons"}}}});</script>
+    </head><body>
+      <div dir="auto">One Pan Lemon Chicken Pea Pasta! #pasta #onepanmeals #easyrecipe #chicken #lemon</div>
+      <div dir="auto">Just before you brought out that Boursin cheese I thought to myself…</div>
+    </body></html>`);
     const r = detectSocialRecipe(doc, 'https://www.facebook.com/reel/1808153320153124');
     expect(r).not.toBeNull();
-    expect(r!.description).toContain('Garlic butter prawns');
+    expect(r!.description).toContain('One Pan Lemon Chicken');
+    expect(r!.description).toContain('1 lb chicken breast'); // full payload, not truncated DOM
+    expect(r!.description).not.toContain('Cajun');
+    expect(r!.ingredients).toContain('1 lb chicken breast');
+  });
+
+  it('decodes escaped unicode in payloads', () => {
+    const doc = docFromHtml(`<!doctype html><html><head>
+      <script>h({"message":{"text":"Garlic butter prawns recipe \\ud83e\\udd90\\n4 tbsp butter\\nSaut\\u00e9 garlic in butter, cook for 4 minutes."}});</script>
+    </head><body><div dir="auto">Garlic butter prawns recipe 🦐 4 tbsp butter… See more</div></body></html>`);
+    const r = detectSocialRecipe(doc, 'https://www.facebook.com/reel/99');
+    expect(r).not.toBeNull();
     expect(r!.description).toContain('Sauté garlic in butter');
   });
 
-  it('falls back to recipe-looking dir="auto" blocks', () => {
+  it('falls back to recipe-looking dir="auto" blocks when scripts have nothing', () => {
     const doc = docFromHtml(`<!doctype html><html><body>
       <div dir="auto">just vibes</div>
       <div dir="auto">One pot chicken: 2 cups rice, 1 lb chicken thighs, 3 cups stock. Simmer 20 minutes covered.</div>
@@ -147,11 +163,12 @@ describe('metasAreFresh', () => {
 });
 
 describe('looksLikeRecipe', () => {
-  it('accepts keywords, measurements, and cooking verbs', () => {
+  it('accepts keywords, measurements, cooking verbs, and recipe hashtags', () => {
     expect(looksLikeRecipe('full recipe below!')).toBe(true);
     expect(looksLikeRecipe('2 cups flour and 1 tbsp sugar')).toBe(true);
     expect(looksLikeRecipe('Preheat the oven then whisk the eggs')).toBe(true);
     expect(looksLikeRecipe('½ cup butter, simmer gently')).toBe(true);
+    expect(looksLikeRecipe('One Pan Lemon Chicken Pea Pasta! #pasta #easyrecipe #chicken')).toBe(true);
   });
   it('rejects ordinary captions', () => {
     expect(looksLikeRecipe('ran 5 g of protein today lol')).toBe(false);
