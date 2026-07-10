@@ -156,6 +156,9 @@ export class CompetitorOverlay {
   private exclude: string;
   private rescanTimer: ReturnType<typeof setTimeout> | null = null;
   private repositionQueued = false;
+  private mutationObserver: MutationObserver | null = null;
+  private queueReposition: (() => void) | null = null;
+  private stopped = false;
 
   constructor(target: CompetitorTarget, onSave: OverlaySaveHandler) {
     this.onSave = onSave;
@@ -172,24 +175,39 @@ export class CompetitorOverlay {
     document.documentElement.appendChild(this.host);
     this.scan();
     // Their save buttons hydrate late — rescan on DOM churn (debounced).
-    new MutationObserver(() => {
+    this.mutationObserver = new MutationObserver(() => {
       if (this.rescanTimer) clearTimeout(this.rescanTimer);
       this.rescanTimer = setTimeout(() => {
+        if (this.stopped) return;
         this.scan();
         this.reposition();
       }, 400);
-    }).observe(document.documentElement, { childList: true, subtree: true });
+    });
+    this.mutationObserver.observe(document.documentElement, { childList: true, subtree: true });
 
-    const queueReposition = (): void => {
-      if (this.repositionQueued) return;
+    this.queueReposition = (): void => {
+      if (this.repositionQueued || this.stopped) return;
       this.repositionQueued = true;
       requestAnimationFrame(() => {
         this.repositionQueued = false;
         this.reposition();
       });
     };
-    window.addEventListener('scroll', queueReposition, { capture: true, passive: true });
-    window.addEventListener('resize', queueReposition, { passive: true });
+    window.addEventListener('scroll', this.queueReposition, { capture: true, passive: true });
+    window.addEventListener('resize', this.queueReposition, { passive: true });
+  }
+
+  /** Removes all overlays and stops observing (e.g. stale script after an extension update). */
+  destroy(): void {
+    this.stopped = true;
+    this.mutationObserver?.disconnect();
+    if (this.rescanTimer) clearTimeout(this.rescanTimer);
+    if (this.queueReposition) {
+      window.removeEventListener('scroll', this.queueReposition, { capture: true });
+      window.removeEventListener('resize', this.queueReposition);
+    }
+    this.covered = [];
+    this.host.remove();
   }
 
   private scan(): void {

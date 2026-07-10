@@ -6,11 +6,41 @@ import { getSettings, updateSettings } from '../shared/storage';
 import type { ExtractedRecipe, Message, SaveResult } from '../shared/types';
 
 let button: PepperButton | null = null;
+let overlay: CompetitorOverlay | null = null;
 let currentRecipe: ExtractedRecipe | null = null;
 let lastSignature = '';
+let dead = false;
+
+/**
+ * After an extension update/reload, this orphaned script's chrome APIs throw
+ * synchronously ("Extension context invalidated"). Detect it and go quiet:
+ * remove all Pepper UI and stop observing. The page just needs a reload.
+ */
+function teardown(): void {
+  if (dead) return;
+  dead = true;
+  button?.destroy();
+  button = null;
+  overlay?.destroy();
+  overlay = null;
+}
+
+function contextAlive(): boolean {
+  try {
+    return Boolean(chrome.runtime?.id);
+  } catch {
+    return false;
+  }
+}
 
 function send<M extends Message>(message: M): Promise<SaveResult> {
-  return chrome.runtime.sendMessage(message);
+  try {
+    if (!contextAlive()) throw new Error('extension context invalidated');
+    return chrome.runtime.sendMessage(message);
+  } catch {
+    teardown();
+    return Promise.resolve({ status: 'error', error: 'Pepper was updated — reload the page.' });
+  }
 }
 
 async function saveCurrentRecipe(): Promise<SaveResult> {
@@ -43,6 +73,11 @@ async function handleFloatingSave(): Promise<void> {
 }
 
 function runDetection(): void {
+  if (dead) return;
+  if (!contextAlive()) {
+    teardown();
+    return;
+  }
   // Structured data first; social captions (IG/TikTok/FB/Pinterest) as fallback.
   const recipe = detectRecipe(document, location.href) ?? detectSocialRecipe(document, location.href);
   // Only react when the outcome meaningfully changes (SPA observers fire a lot).
@@ -66,6 +101,7 @@ function runDetection(): void {
 function watchForChanges(): void {
   let timer: ReturnType<typeof setTimeout> | null = null;
   const schedule = (): void => {
+    if (dead) return;
     if (timer) clearTimeout(timer);
     timer = setTimeout(runDetection, 500);
   };
@@ -94,14 +130,20 @@ async function main(): Promise<void> {
 
   button = new PepperButton({
     onSave: () => void handleFloatingSave(),
-    onPositionChange: (pos) => void updateSettings({ buttonPosition: pos }),
+    onPositionChange: (pos) => {
+      try {
+        void updateSettings({ buttonPosition: pos }).catch(() => teardown());
+      } catch {
+        teardown();
+      }
+    },
   });
   button.mount(settings.buttonPosition);
 
   // MyRecipes-network sites: Pepper's save button overlays theirs.
   const competitorTarget = targetsForHost(location.hostname);
   if (competitorTarget) {
-    const overlay = new CompetitorOverlay(competitorTarget, async (card: CardRecipeRef | null) => {
+    overlay = new CompetitorOverlay(competitorTarget, async (card: CardRecipeRef | null) => {
       // Roundup-card buttons save their own recipe (URL stub, extracted
       // server-side later); recipe-page buttons save the detected recipe.
       const result = card
