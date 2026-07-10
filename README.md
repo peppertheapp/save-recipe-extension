@@ -42,5 +42,6 @@ npm run typecheck && npm run lint
 ## Notes
 
 - API base URL defaults to `https://api.peppertheapp.com`; override via the `apiBaseUrl` setting in `chrome.storage.sync` for staging.
-- Icons are generated placeholders — swap in real brand assets (`public/icons/`) when available.
+- Toolbar/store icons are generated placeholders — swap in real brand assets (`public/icons/`) when available.
+- **Button logo:** drop a white-on-transparent PNG at `public/icons/button-logo.png` and rebuild — it appears on the green floating button and the site-overlay button. If the file is missing, an inline SVG trace is used instead.
 - The fixture pages are hand-modeled on each site's real structured-data patterns (`@graph`, `HowToSection`, entity soup, microdata-only), not verbatim copies. Re-verify against live pages before ship.

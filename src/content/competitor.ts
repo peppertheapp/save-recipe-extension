@@ -40,7 +40,7 @@ export function targetsForHost(hostname: string): CompetitorTarget | undefined {
   );
 }
 
-import { PEPPER_LOGO_SVG } from './logo';
+import { createLogoNode } from './logo';
 
 const OVERLAY_STYLES = `
 :host { all: initial; }
@@ -163,7 +163,12 @@ export class CompetitorOverlay {
 
   private renderLabel(button: HTMLButtonElement, text: string): void {
     const compact = button.offsetWidth > 0 && button.offsetWidth < 110;
-    button.innerHTML = `${PEPPER_LOGO_SVG}${compact ? '' : `<span>${text}</span>`}`;
+    button.replaceChildren(createLogoNode());
+    if (!compact) {
+      const span = document.createElement('span');
+      span.textContent = text;
+      button.appendChild(span);
+    }
     button.title = text;
   }
 

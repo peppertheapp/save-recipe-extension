@@ -35,4 +35,11 @@ export default defineManifest({
   ],
   permissions: ['storage', 'alarms'],
   host_permissions: ['https://api.peppertheapp.com/*'],
+  web_accessible_resources: [
+    {
+      // Button logo, rendered by the content script's <img> in page context.
+      resources: ['icons/button-logo.png'],
+      matches: ['<all_urls>'],
+    },
+  ],
 });

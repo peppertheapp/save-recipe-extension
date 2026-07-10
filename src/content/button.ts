@@ -5,7 +5,7 @@ export interface ButtonCallbacks {
   onPositionChange: (pos: { right: number; bottom: number }) => void;
 }
 
-import { PEPPER_LOGO_SVG } from './logo';
+import { renderLogo } from './logo';
 
 const STYLES = `
 :host { all: initial; }
@@ -22,7 +22,8 @@ const STYLES = `
   transition: transform .15s ease, background .2s ease, opacity .2s ease;
   color: #fff;
 }
-.btn svg { width: 30px; height: 30px; }
+.btn svg, .btn img.logo { width: 30px; height: 30px; }
+.btn img.logo { object-fit: contain; }
 .btn:hover { transform: scale(1.08); }
 .btn.green { background: #1db954; }
 .btn.saving { background: #1db954; }
@@ -126,7 +127,7 @@ export class PepperButton {
   private renderFace(message?: string): void {
     switch (this.state) {
       case 'green':
-        this.btn.innerHTML = PEPPER_LOGO_SVG;
+        renderLogo(this.btn);
         this.setLabel('Save to Pepper');
         break;
       case 'saving':
