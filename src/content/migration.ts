@@ -21,14 +21,22 @@ const COLLECTION_PAGES: { hosts: string[]; pathPattern: RegExp }[] = [
   { hosts: ['allrecipes.com'], pathPattern: /favorites|my-saves/ },
 ];
 
+const NETWORK_DOMAINS =
+  'allrecipes|eatingwell|foodandwine|simplyrecipes|seriouseats|thespruceeats|realsimple|southernliving|marthastewart|liquor|myrecipes';
+
+/** Any URL on a network domain (used for explicit doc pointers we can trust). */
+const NETWORK_HOST_RE = new RegExp(`^https?:\\/\\/(www\\.)?(${NETWORK_DOMAINS})\\.com\\/.`, 'i');
+
 /**
  * Recipe-looking links on the Dotdash network (favorites link out to source
  * sites). Shapes: /recipe/<anything> (allrecipes), /recipes/<slug> with a
  * non-numeric slug (foodandwine/simplyrecipes — numeric = category hub), and
  * <slug>-recipe / <slug>-recipe-<id> (seriouseats/eatingwell).
  */
-const RECIPE_LINK_RE =
-  /^https?:\/\/(www\.)?(allrecipes|eatingwell|foodandwine|simplyrecipes|seriouseats|thespruceeats|realsimple|southernliving|marthastewart|liquor|myrecipes)\.com\/(?:.*\/)?(?:recipe\/[^?]+|recipes\/(?!\d+(?:\/|$))[^/?]+\/?|[^/?]*-recipe(?:-[^/?]*)?\/?)$/i;
+const RECIPE_LINK_RE = new RegExp(
+  `^https?:\\/\\/(www\\.)?(${NETWORK_DOMAINS})\\.com\\/(?:.*\\/)?(?:recipe\\/[^?]+|recipes\\/(?!\\d+(?:\\/|$))[^/?]+\\/?|[^/?]*-recipe(?:-[^/?]*)?\\/?)$`,
+  'i',
+);
 
 export function isCollectionPage(url: string): boolean {
   let parsed: URL;
@@ -46,15 +54,89 @@ export function isCollectionPage(url: string): boolean {
 
 export function collectRecipeLinks(doc: Document): { url: string; title: string }[] {
   const seen = new Map<string, string>();
+  const add = (url: string, title: string): void => {
+    if (seen.has(url) || seen.size >= IMPORT_CAP) return;
+    const clean = title.trim().replace(/\s+/g, ' ') || titleFromSlug(url);
+    seen.set(url, clean.length > 120 ? `${clean.slice(0, 117)}…` : clean);
+  };
+
+  // 1) Explicit doc pointers — the MyRecipes favorites app puts the recipe URL
+  //    in data-doc-url on each card (cards aren't links; the SPA routes in JS).
+  for (const el of doc.querySelectorAll('[data-doc-url]')) {
+    const url = (el.getAttribute('data-doc-url') ?? '').split('#')[0] ?? '';
+    if (!NETWORK_HOST_RE.test(url)) continue;
+    const title =
+      el.querySelector('img[alt]')?.getAttribute('alt') ?? el.textContent ?? '';
+    add(url, title);
+  }
+
+  // 2) Anchor heuristic for saved pages that render plain links.
   for (const a of doc.querySelectorAll<HTMLAnchorElement>('a[href]')) {
     const href = (a.href || '').split('#')[0] ?? '';
     if (!RECIPE_LINK_RE.test(href)) continue;
-    if (seen.has(href)) continue;
-    const title = a.textContent?.trim().replace(/\s+/g, ' ') || titleFromSlug(href);
-    seen.set(href, title.length > 120 ? `${title.slice(0, 117)}…` : title);
-    if (seen.size >= IMPORT_CAP) break;
+    add(href, a.textContent ?? '');
   }
+
   return [...seen.entries()].map(([url, title]) => ({ url, title }));
+}
+
+/**
+ * The favorites app fetches the full collection from /bookmarks/getall (seen
+ * in the page's own network calls). Walk the JSON defensively — we don't
+ * control the shape — collecting network-domain URLs + nearby titles, while
+ * ignoring image/thumbnail fields.
+ */
+export function extractBookmarksFromJson(data: unknown): { url: string; title: string }[] {
+  const out = new Map<string, string>();
+  const URL_KEYS = ['url', 'docUrl', 'doc_url', 'canonicalUrl', 'canonical_url', 'link', 'permalink'];
+  const TITLE_KEYS = ['title', 'headline', 'displayName', 'name'];
+
+  const urlFrom = (obj: Record<string, unknown>): string => {
+    for (const key of URL_KEYS) {
+      const v = obj[key];
+      if (typeof v === 'string' && NETWORK_HOST_RE.test(v)) return v;
+    }
+    for (const [key, v] of Object.entries(obj)) {
+      if (!/url$/i.test(key) || /image|thumb|photo|avatar/i.test(key)) continue;
+      if (typeof v === 'string' && NETWORK_HOST_RE.test(v) && !v.includes('/thmb/')) return v;
+    }
+    return '';
+  };
+
+  const visit = (node: unknown): void => {
+    if (out.size >= IMPORT_CAP) return;
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    if (!node || typeof node !== 'object') return;
+    const obj = node as Record<string, unknown>;
+    const url = urlFrom(obj);
+    if (url && !out.has(url)) {
+      const title = TITLE_KEYS.map((k) => obj[k]).find(
+        (v): v is string => typeof v === 'string' && v.trim().length > 0,
+      );
+      out.set(url, title?.trim() ?? titleFromSlug(url));
+    }
+    Object.values(obj).forEach(visit);
+  };
+  visit(data);
+  return [...out.entries()].map(([url, title]) => ({ url, title }));
+}
+
+/** API-first collection fetch; empty result means "fall back to the DOM". */
+export async function fetchBookmarksViaApi(): Promise<{ url: string; title: string }[]> {
+  if (!/(^|\.)myrecipes\.com$/.test(location.hostname)) return [];
+  try {
+    const res = await fetch('/bookmarks/getall', {
+      credentials: 'include',
+      headers: { accept: 'application/json' },
+    });
+    if (!res.ok) return [];
+    return extractBookmarksFromJson(await res.json()).slice(0, IMPORT_CAP);
+  } catch {
+    return [];
+  }
 }
 
 export function titleFromSlug(url: string): string {
@@ -149,17 +231,29 @@ export class MigrationBanner {
   mount(): void {
     if (sessionStorage.getItem(this.dismissKey)) return;
     document.documentElement.appendChild(this.host);
-    // The list renders client-side — refresh the count as items appear.
+
+    // Best count: the app's own bookmarks API (whole collection, no scrolling).
+    void fetchBookmarksViaApi().then((links) => {
+      if (links.length > 0) this.showCount(links.length);
+    });
+
+    // Fallback count from the rendered list — refresh as items appear.
     const updateCount = (): void => {
+      if (this.apiCount > 0) return;
       const count = collectRecipeLinks(document).length;
-      if (count > 0) {
-        this.message.innerHTML = `<strong>🌶 Pepper</strong> — import all <strong>${count}</strong> saved recipes?`;
-      }
+      if (count > 0) this.showCount(count, /*fromApi*/ false);
     };
     updateCount();
     const observer = new MutationObserver(() => updateCount());
     observer.observe(document.documentElement, { childList: true, subtree: true });
     setTimeout(() => observer.disconnect(), 30_000); // count settles quickly
+  }
+
+  private apiCount = 0;
+
+  private showCount(count: number, fromApi = true): void {
+    if (fromApi) this.apiCount = count;
+    this.message.innerHTML = `<strong>🌶 Pepper</strong> — import all <strong>${count}</strong> saved recipes?`;
   }
 
   destroy(): void {
@@ -182,8 +276,12 @@ export class MigrationBanner {
 
   private async runImport(): Promise<void> {
     this.importBtn.disabled = true;
-    const links = await this.loadFullList();
-    window.scrollTo(0, 0);
+    // API first (complete collection in one call); DOM auto-scroll fallback.
+    let links = await fetchBookmarksViaApi();
+    if (links.length === 0) {
+      links = await this.loadFullList();
+      window.scrollTo(0, 0);
+    }
     if (links.length === 0) {
       this.message.textContent = 'No saved recipes found on this page.';
       this.importBtn.disabled = false;
