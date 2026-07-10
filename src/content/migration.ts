@@ -171,7 +171,7 @@ const BANNER_STYLES = `
   z-index: 2147483647;
   display: flex; align-items: center; gap: 12px;
   padding: 12px 18px;
-  background: #1db954; color: #fff;
+  background: #ff5f50; color: #fff;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
   box-shadow: 0 2px 10px rgba(0,0,0,.25);
@@ -179,7 +179,7 @@ const BANNER_STYLES = `
 .bar strong { font-weight: 700; }
 .grow { flex: 1; }
 button.import {
-  background: #fff; color: #128a3e; border: none; border-radius: 0;
+  background: #fff; color: #e0402f; border: none; border-radius: 0;
   padding: 8px 16px; font-size: 14px; font-weight: 700; cursor: pointer;
 }
 button.import:disabled { opacity: .7; cursor: default; }

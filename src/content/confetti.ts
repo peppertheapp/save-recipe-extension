@@ -4,7 +4,7 @@
  * removes itself when done. Fires from the save button's location.
  */
 
-const COLORS = ['#1db954', '#ea4025', '#ffd23f', '#ffffff', '#7ce3a1'];
+const COLORS = ['#ff5f50', '#e0402f', '#ffd23f', '#ffffff', '#ffb0a8'];
 const PARTICLE_COUNT = 44;
 const DURATION_MS = 1300;
 const GRAVITY = 0.32;

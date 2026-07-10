@@ -84,7 +84,7 @@ const OVERLAY_STYLES = `
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: #1db954;
+  background: #ff5f50;
   color: #fff;
   border: none;
   border-radius: 0;

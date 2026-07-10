@@ -49,8 +49,8 @@ export const PEPPER_LOGO_SVG = `
     C89,15 86,21 83,27
     C81,31 78,31 76,29
     C74,28 72,27 73,25 Z"/>
-  <path fill="none" stroke="#1db954" stroke-width="3.5" stroke-linecap="round"
+  <path fill="none" stroke="#ff5f50" stroke-width="3.5" stroke-linecap="round"
     d="M68,32 C74,28 78,26 82,24"/>
-  <path fill="none" stroke="#1db954" stroke-width="3" stroke-linecap="round"
+  <path fill="none" stroke="#ff5f50" stroke-width="3" stroke-linecap="round"
     d="M26,74 C44,66 58,55 68,42"/>
 </svg>`;

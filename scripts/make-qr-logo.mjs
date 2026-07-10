@@ -93,7 +93,7 @@ function encodePng(size, px) {
 }
 
 const SIZE = 128;
-const GREEN = [29, 185, 84];
+const BRAND = [255, 95, 80]; // #ff5f50
 const mark = decodePng(readFileSync(join(iconsDir, 'button-logo.png')));
 
 const out = Buffer.alloc(SIZE * SIZE * 4);
@@ -123,9 +123,9 @@ for (let y = 0; y < SIZE; y++) {
         at(x0 + 1, y0 + 1) * fx * fy;
     }
     const t = markA / 255;
-    out[o] = Math.round(255 * t + GREEN[0] * (1 - t));
-    out[o + 1] = Math.round(255 * t + GREEN[1] * (1 - t));
-    out[o + 2] = Math.round(255 * t + GREEN[2] * (1 - t));
+    out[o] = Math.round(255 * t + BRAND[0] * (1 - t));
+    out[o + 1] = Math.round(255 * t + BRAND[1] * (1 - t));
+    out[o + 2] = Math.round(255 * t + BRAND[2] * (1 - t));
     out[o + 3] = discAlpha;
   }
 }

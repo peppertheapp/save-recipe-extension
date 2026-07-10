@@ -26,9 +26,9 @@ const STYLES = `
 .btn svg, .btn img.logo { width: 30px; height: 30px; }
 .btn img.logo { object-fit: contain; }
 .btn:hover { transform: scale(1.08); }
-.btn.green { background: #1db954; }
-.btn.saving { background: #1db954; }
-.btn.saved, .btn.duplicate { background: #1db954; }
+.btn.green { background: #ff5f50; }
+.btn.saving { background: #ff5f50; }
+.btn.saved, .btn.duplicate { background: #ff5f50; }
 .btn.error { background: #d93025; animation: shake .4s; }
 @keyframes shake {
   0%,100% { transform: translateX(0); }
@@ -51,7 +51,7 @@ const STYLES = `
 .wrap:hover .label.hoverable { opacity: 1; }
 .label.forced { opacity: 1; pointer-events: auto; }
 .label button {
-  margin-left: 8px; background: #1db954; color: #fff; border: none;
+  margin-left: 8px; background: #ff5f50; color: #fff; border: none;
   border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer;
 }
 `;

@@ -1,5 +1,7 @@
-// Placeholder icon generator — solid rounded-circle pepper dots in brand green/red.
+// Placeholder icon generator — solid rounded-circle pepper dots.
 // Replace with real brand assets when Jake provides them (open item #4 in the plan).
+// Filenames keep the historical green/red names; colors follow the brand theme:
+// "green" = recipe found (brand coral #ff5f50), "red" = no recipe (neutral gray).
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -9,8 +11,8 @@ const outDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'ic
 mkdirSync(outDir, { recursive: true });
 
 const COLORS = {
-  green: [29, 185, 84],
-  red: [217, 48, 37],
+  green: [255, 95, 80],
+  red: [150, 150, 150],
 };
 const SIZES = [16, 32, 48, 128];
 
