@@ -2,11 +2,13 @@ import { detectRecipe } from './detector';
 import { detectSocialRecipe } from './social';
 import { PepperButton } from './button';
 import { CompetitorOverlay, targetsForHost, type CardRecipeRef } from './competitor';
+import { isCollectionPage, MigrationBanner } from './migration';
 import { getSettings, updateSettings } from '../shared/storage';
 import type { ExtractedRecipe, Message, SaveResult } from '../shared/types';
 
 let button: PepperButton | null = null;
 let overlay: CompetitorOverlay | null = null;
+let banner: MigrationBanner | null = null;
 let currentRecipe: ExtractedRecipe | null = null;
 let lastSignature = '';
 let dead = false;
@@ -23,6 +25,8 @@ function teardown(): void {
   button = null;
   overlay?.destroy();
   overlay = null;
+  banner?.destroy();
+  banner = null;
 }
 
 function contextAlive(): boolean {
@@ -163,6 +167,17 @@ async function main(): Promise<void> {
       return 'error';
     });
     overlay.start();
+  }
+
+  // Saved-collection pages (MyRecipes favorites): offer one-click import.
+  if (isCollectionPage(location.href)) {
+    banner = new MigrationBanner(async (recipe) => {
+      const result = await send({ type: 'SAVE_RECIPE', recipe });
+      if (result.status === 'saved' || result.status === 'queued') return 'saved';
+      if (result.status === 'duplicate') return 'duplicate';
+      return 'error';
+    });
+    banner.mount();
   }
 
   runDetection();
