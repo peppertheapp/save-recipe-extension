@@ -79,25 +79,57 @@ function decodeJsonString(body: string): string {
   }
 }
 
+interface ScriptCaption {
+  text: string;
+  /** Raw script source + match position, so author/thumbnail lookups can stay near THIS post's payload. */
+  scriptSource: string;
+  index: number;
+}
+
 /**
  * Scan inline scripts for ALL `"<key>":{"text":"…"}` payloads (Facebook relay
  * data). Feed/reel pages preload sibling posts, so several captions coexist —
  * callers must disambiguate against the visible DOM.
  */
-function scriptCaptions(doc: Document, keys: string[]): string[] {
-  const out: string[] = [];
+function scriptCaptions(doc: Document, keys: string[]): ScriptCaption[] {
+  const out: ScriptCaption[] = [];
   for (const script of doc.querySelectorAll('script')) {
     const text = script.textContent ?? '';
     for (const key of keys) {
       const re = new RegExp(`"${key}"\\s*:\\s*\\{\\s*"text"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`, 'g');
       for (const m of text.matchAll(re)) {
         const decoded = decodeJsonString(m[1] ?? '');
-        if (decoded.length > 20 && !out.includes(decoded)) out.push(decoded);
+        if (decoded.length > 20 && !out.some((c) => c.text === decoded)) {
+          out.push({ text: decoded, scriptSource: text, index: m.index ?? 0 });
+        }
       }
     }
   }
   return out;
 }
+
+/** Decoded string from the regex match closest to `center` in `source`. */
+function nearestScriptValue(source: string, re: RegExp, center: number): string {
+  let best = '';
+  let bestDistance = Infinity;
+  for (const m of source.matchAll(re)) {
+    const distance = Math.abs((m.index ?? 0) - center);
+    if (distance < bestDistance && m[1]) {
+      bestDistance = distance;
+      best = decodeJsonString(m[1]);
+    }
+  }
+  return best;
+}
+
+const FB_AUTHOR_RES = [
+  /"actors"\s*:\s*\[\s*\{[^[\]{}]*?"name"\s*:\s*"((?:[^"\\]|\\.)*)"/g,
+  /"owner"\s*:\s*\{[^{}]*?"name"\s*:\s*"((?:[^"\\]|\\.)*)"/g,
+];
+const FB_THUMBNAIL_RES = [
+  /"preferred_thumbnail"\s*:\s*\{\s*"image"\s*:\s*\{[^{}]*?"uri"\s*:\s*"((?:[^"\\]|\\.)*)"/g,
+  /"thumbnailImage"\s*:\s*\{[^{}]*?"uri"\s*:\s*"((?:[^"\\]|\\.)*)"/g,
+];
 
 /** Walk parsed JSON for the first long string under a matching key. */
 function deepFindString(node: unknown, keyRe: RegExp, minLen: number, depth = 0): string {
@@ -117,6 +149,7 @@ function deepFindString(node: unknown, keyRe: RegExp, minLen: number, depth = 0)
 interface SocialCapture {
   caption: string;
   author?: string;
+  image?: string;
 }
 
 function extractInstagram(doc: Document, url: string): SocialCapture {
@@ -140,11 +173,19 @@ function extractTikTok(doc: Document, url: string): SocialCapture {
       const data = JSON.parse(universal.textContent) as Record<string, unknown>;
       const scope = data['__DEFAULT_SCOPE__'] as Record<string, unknown> | undefined;
       const detail = scope?.['webapp.video-detail'] as
-        | { itemInfo?: { itemStruct?: { desc?: string; author?: { nickname?: string } } } }
+        | {
+            itemInfo?: {
+              itemStruct?: {
+                desc?: string;
+                author?: { nickname?: string };
+                video?: { cover?: string };
+              };
+            };
+          }
         | undefined;
       const item = detail?.itemInfo?.itemStruct;
       if (item?.desc && item.desc.length > 10) {
-        return { caption: item.desc, author: item.author?.nickname };
+        return { caption: item.desc, author: item.author?.nickname, image: item.video?.cover };
       }
       const anyDesc = deepFindString(data, /^desc$/, 30);
       if (anyDesc) return { caption: anyDesc };
@@ -185,16 +226,30 @@ function extractFacebook(doc: Document, url: string): SocialCapture {
   //    siblings. The active one is whichever also appears on screen; take the
   //    longest such payload (visible copies are often "See more"-truncated).
   const candidates = scriptCaptions(doc, ['message', 'savable_description']);
-  let best = '';
+  let best: ScriptCaption | null = null;
   for (const candidate of candidates) {
-    const head = normalize(candidate).slice(0, 30);
+    const head = normalize(candidate.text).slice(0, 30);
     const onScreen = visible.some((v) => {
       const nv = normalize(v);
-      return nv.startsWith(head) || normalize(candidate).startsWith(nv.slice(0, 30));
+      return nv.startsWith(head) || normalize(candidate.text).startsWith(nv.slice(0, 30));
     });
-    if (onScreen && candidate.length > best.length) best = candidate;
+    if (onScreen && candidate.text.length > (best?.text.length ?? 0)) best = candidate;
   }
-  if (best) return { caption: best };
+  if (best) {
+    // Author + cover live in the same relay object — search nearest to the
+    // caption's position so we never pick a preloaded sibling's metadata.
+    const author = FB_AUTHOR_RES.map((re) =>
+      nearestScriptValue(best!.scriptSource, re, best!.index),
+    ).find(Boolean);
+    const image = FB_THUMBNAIL_RES.map((re) =>
+      nearestScriptValue(best!.scriptSource, re, best!.index),
+    ).find((u) => u?.startsWith('http'));
+    return {
+      caption: best.text,
+      author: author || undefined,
+      image: image || doc.querySelector('video')?.getAttribute('poster') || undefined,
+    };
+  }
 
   // 2) Dedicated caption nodes (feed posts / permalinks).
   const nodeCaption = visible.find((v, i) => i < 2 && v.length > 20);
@@ -364,7 +419,7 @@ export function detectSocialRecipe(doc: Document, url: string): ExtractedRecipe 
   );
   if (!site || !site.pathPattern.test(parsed.pathname)) return null;
 
-  const { caption, author } = site.extract(doc, url);
+  const { caption, author, image } = site.extract(doc, url);
   if (!caption || !looksLikeRecipe(caption)) return null;
 
   const structured = parseCaptionRecipe(caption);
@@ -377,8 +432,9 @@ export function detectSocialRecipe(doc: Document, url: string): ExtractedRecipe 
     extractionMethod: 'server', // backend LLM pass refines caption parses
   };
   if (author) recipe.author = author;
-  const image = metasAreFresh(doc, url) ? metaContent(doc, 'og:image') : '';
-  if (image) recipe.imageUrl = image;
+  // Platform-native cover (video poster/thumbnail) beats og:image.
+  const cover = image || (metasAreFresh(doc, url) ? metaContent(doc, 'og:image') : '');
+  if (cover) recipe.imageUrl = cover;
   return recipe;
 }
 

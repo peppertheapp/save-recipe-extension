@@ -1,5 +1,6 @@
 import { detectRecipe } from './detector';
 import { detectSocialRecipe } from './social';
+import { detectHeuristicRecipe } from './heuristic';
 import { PepperButton } from './button';
 import { CompetitorOverlay, targetsForHost, type CardRecipeRef } from './competitor';
 import { isCollectionPage, MigrationBanner } from './migration';
@@ -89,8 +90,12 @@ function runDetection(): void {
     teardown();
     return;
   }
-  // Structured data first; social captions (IG/TikTok/FB/Pinterest) as fallback.
-  const recipe = detectRecipe(document, location.href) ?? detectSocialRecipe(document, location.href);
+  // Structured data first; social captions (IG/TikTok/FB/Pinterest) next;
+  // heading-based heuristic for schema-less pages last.
+  const recipe =
+    detectRecipe(document, location.href) ??
+    detectSocialRecipe(document, location.href) ??
+    detectHeuristicRecipe(document, location.href);
   // Only react when the outcome meaningfully changes (SPA observers fire a lot).
   const signature = recipe ? `${location.href}::${recipe.title}` : `${location.href}::none`;
   if (signature === lastSignature) return;
