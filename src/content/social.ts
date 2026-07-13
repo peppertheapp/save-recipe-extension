@@ -240,31 +240,39 @@ function extractFacebook(doc: Document, url: string): SocialCapture {
   }
 
   // 1) Relay payloads hold the FULL caption — but possibly for this reel AND
-  //    preloaded siblings. A single candidate is unambiguous (reel overlays
-  //    render the caption outside dir=auto, so don't demand a DOM match);
-  //    multiple candidates disambiguate against what's on screen.
+  //    preloaded siblings. Reel captions don't reliably render in matchable DOM
+  //    text (collapsed behind "See more", split across spans), so the recipe
+  //    gate does the disambiguation: sibling teasers aren't recipe-shaped, the
+  //    real caption is. On-screen is only a tiebreaker; we never guess blindly.
+  const onScreen = (c: ScriptCaption): boolean => {
+    const head = normalize(c.text).slice(0, 30);
+    return visible.some((v) => {
+      const nv = normalize(v);
+      return nv.startsWith(head) || normalize(c.text).startsWith(nv.slice(0, 30));
+    });
+  };
+  const longest = (list: ScriptCaption[]): ScriptCaption | null =>
+    list.reduce<ScriptCaption | null>((a, b) => (b.text.length > (a?.text.length ?? 0) ? b : a), null);
+
   const candidates = scriptCaptions(doc, ['message', 'savable_description']);
-  let best: ScriptCaption | null = candidates.length === 1 ? (candidates[0] ?? null) : null;
-  if (!best) {
-    for (const candidate of candidates) {
-      const head = normalize(candidate.text).slice(0, 30);
-      const onScreen = visible.some((v) => {
-        const nv = normalize(v);
-        return nv.startsWith(head) || normalize(candidate.text).startsWith(nv.slice(0, 30));
-      });
-      if (onScreen && candidate.text.length > (best?.text.length ?? 0)) best = candidate;
-    }
-  }
-  if (best) {
-    // Creators often tease in the caption and put the recipe in a pinned
-    // comment. If the caption alone isn't recipe-shaped, append the strongest
-    // recipe-looking comment body so the save carries the actual recipe.
-    let caption = best.text;
-    if (!looksLikeRecipe(caption)) {
+  const recipeish = candidates.filter((c) => looksLikeRecipe(c.text));
+
+  let best: ScriptCaption | null;
+  if (recipeish.length > 0) {
+    // The recipe caption itself (on-screen ones win ties).
+    const visibleRecipes = recipeish.filter(onScreen);
+    best = longest(visibleRecipes.length > 0 ? visibleRecipes : recipeish);
+  } else {
+    // No recipe-shaped caption — this reel may tease and hide the recipe in a
+    // pinned comment. Take the ACTIVE caption (on-screen, else the only one)
+    // and append the strongest recipe-looking comment.
+    const active = candidates.find(onScreen) ?? (candidates.length === 1 ? candidates[0] : null);
+    if (active) {
       const comment = strongestRecipeComment(doc);
-      if (comment) caption = `${caption}\n\n${comment}`;
+      best = comment ? { ...active, text: `${active.text}\n\n${comment}` } : null;
+    } else {
+      best = null;
     }
-    best = { ...best, text: caption };
   }
   if (best) {
     // Author + cover live in the same relay object — search nearest to the
@@ -375,7 +383,9 @@ export function looksLikeRecipe(text: string): boolean {
 
 // ---------------------------------------------------------------- caption parsing
 
-const BULLET_RE = /^[\s\-–—•*▪◦✅✔️🔸🔹👉>]+|^\d{1,2}[.)]\s*/u;
+// Strip bullets and "1." / "2)" list markers — but require a space after the
+// number so decimal quantities ("2.2 lb potatoes") aren't mangled.
+const BULLET_RE = /^[\s\-–—•*▪◦✅✔️🔸🔹👉>]+|^\d{1,2}[.)]\s+/u;
 const HEADER_INGREDIENTS_RE = /^[\s#*_]*(ingredients?|what you('|’)?ll? need)\b/i;
 const HEADER_INSTRUCTIONS_RE = /^[\s#*_]*(instructions?|directions?|method|steps?|how to make)\b/i;
 const HEADER_OTHER_RE = /^[\s#*_]*(notes?|tips?|nutrition|macros)\b/i;

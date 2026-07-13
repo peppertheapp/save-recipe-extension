@@ -119,6 +119,27 @@ describe('detectSocialRecipe — Facebook', () => {
     expect(r!.ingredients).toContain('1 lb chicken breast');
   });
 
+  it('picks the recipe-shaped caption over an off-screen teaser sibling', () => {
+    // Live reel/1530324475209311: the focused reel's full potato recipe is one
+    // message payload; a scrolled-past sibling ("Chocolate Cloud" teaser) is
+    // another. Neither cross-matches the visible DOM (captions sit behind
+    // "See more"). The recipe gate must pick the potato caption.
+    const potato =
+      'This is the Best way to Eat Potatoes!!\\n\\nIngredients:\\n2.2 lb potatoes\\nPaprika\\nOlive oil\\n4 cloves garlic\\nBake at 350\\u00b0F for 30 minutes.';
+    const doc = docFromHtml(`<!doctype html><html><head>
+      <script>a({"message":{"text":"Chocolate Cloud \\u2013 One bite and you're in Heaven!!"}});</script>
+      <script>b({"feedback:1020078483897904":{},"message":{"text":"${potato}"}});</script>
+    </head><body>
+      <div dir="auto">827K followers • 53 following</div>
+      <div dir="auto">See more</div>
+    </body></html>`);
+    const r = detectSocialRecipe(doc, 'https://www.facebook.com/reel/1530324475209311');
+    expect(r).not.toBeNull();
+    expect(r!.title).toContain('Best way to Eat Potatoes');
+    expect(r!.description).not.toContain('Chocolate Cloud');
+    expect(r!.ingredients).toContain('2.2 lb potatoes');
+  });
+
   it('decodes escaped unicode in payloads', () => {
     const doc = docFromHtml(`<!doctype html><html><head>
       <script>h({"message":{"text":"Garlic butter prawns recipe \\ud83e\\udd90\\n4 tbsp butter\\nSaut\\u00e9 garlic in butter, cook for 4 minutes."}});</script>
