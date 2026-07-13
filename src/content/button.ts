@@ -165,13 +165,21 @@ export class PepperButton {
   }
 
   /**
-   * Already-imported recipes keep a persistent checkmark and expose the
-   * details inspector; unsaved recipes show the logo.
+   * Reflect stored state during detection: checkmark + details button for
+   * already-saved recipes, logo otherwise. Skips repaint mid-save so an async
+   * detection check can't stomp an in-progress spinner.
    */
   setSaved(saved: boolean): void {
     this.savedState = saved;
     this.detailsBtn.classList.toggle('visible', saved);
     if (this.state !== 'saving') this.setState(saved ? 'saved' : 'green');
+  }
+
+  /** A save just completed — force the checkmark + details button on. */
+  confirmSaved(): void {
+    this.savedState = true;
+    this.detailsBtn.classList.add('visible');
+    this.setState('saved'); // explicit: overrides the 'saving' spinner
   }
 
   /** Confetti — called by the save flow on FRESH saves only. */

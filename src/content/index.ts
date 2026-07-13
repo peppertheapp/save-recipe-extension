@@ -70,11 +70,11 @@ async function handleFloatingSave(): Promise<void> {
   const result = await saveCurrentRecipe();
   switch (result.status) {
     case 'saved':
-      button.setSaved(true);
+      button.confirmSaved();
       button.celebrate();
       break;
     case 'duplicate':
-      button.setSaved(true);
+      button.confirmSaved();
       break;
     case 'queued':
       button.setState('error', 'Offline — queued, will retry');

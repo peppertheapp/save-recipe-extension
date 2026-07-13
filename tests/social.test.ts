@@ -281,6 +281,27 @@ describe('parseCaptionRecipe', () => {
     expect(ingredients).toEqual([]);
     expect(instructions).toEqual([]);
   });
+
+  it('parses run-on captions with no line breaks and mid-text markers', () => {
+    // Modeled on the live cabbage reel: one paragraph, promo before the recipe,
+    // "Ingredients:" glued to the first item, items space-separated.
+    const caption =
+      'Southern Fried Cabbage For Weight Loss (recipe) Macros per serving: approx 625 calories. ' +
+      'Announcements: my cookbooks are 50% off, comment "cookbook"! ' +
+      'Ingredients:2 center cut bacon strips 2 aidells cajun andouille sausage 16 oz chicken breast ' +
+      'Directions: Cook the bacon until crisp. Add the sausage and chicken and brown. Stir in the cabbage and simmer.';
+    const { ingredients, instructions } = parseCaptionRecipe(caption);
+    expect(ingredients).toEqual([
+      '2 center cut bacon strips',
+      '2 aidells cajun andouille sausage',
+      '16 oz chicken breast',
+    ]);
+    expect(instructions.length).toBeGreaterThanOrEqual(3);
+    expect(instructions[0]).toContain('Cook the bacon');
+    // Promo/announcement text must not leak into either list.
+    expect(ingredients.join(' ')).not.toContain('cookbook');
+    expect(instructions.join(' ')).not.toContain('cookbook');
+  });
 });
 
 describe('caption helpers', () => {

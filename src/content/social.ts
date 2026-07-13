@@ -450,9 +450,6 @@ export function looksLikeRecipe(text: string): boolean {
 // Strip bullets and "1." / "2)" list markers — but require a space after the
 // number so decimal quantities ("2.2 lb potatoes") aren't mangled.
 const BULLET_RE = /^[\s\-–—•*▪◦✅✔️🔸🔹👉>]+|^\d{1,2}[.)]\s+/u;
-const HEADER_INGREDIENTS_RE = /^[\s#*_]*(ingredients?|what you('|’)?ll? need)\b/i;
-const HEADER_INSTRUCTIONS_RE = /^[\s#*_]*(instructions?|directions?|method|steps?|how to make)\b/i;
-const HEADER_OTHER_RE = /^[\s#*_]*(notes?|tips?|nutrition|macros)\b/i;
 
 function isNoiseLine(line: string): boolean {
   if (line.length < 3) return true;
@@ -462,71 +459,91 @@ function isNoiseLine(line: string): boolean {
   return tags > words.length / 2;
 }
 
+// Section markers, matched ANYWHERE in the text (not just line starts) — many
+// captions are one run-on paragraph with the labels buried mid-text.
+const MARK_INGREDIENTS = /(?:^|[\s\n])(ingredients?|what you(?:'|’)?ll need)\s*:?/i;
+const MARK_INSTRUCTIONS = /(?:^|[\s\n])(instructions?|directions?|method|steps?|how to make it?)\s*:?/i;
+/** Where a section ends: the next section, or trailing promo/notes/hashtags. */
+const MARK_TRAILER = /(?:^|[\s\n])(notes?|tips?|nutrition|announcements?|follow|comment|link in)\s*:?/i;
+
+/** First index of any marker in `text` at/after `from`, else text length. */
+function firstMarkerIndex(text: string, markers: RegExp[], from: number): number {
+  let end = text.length;
+  for (const re of markers) {
+    const m = new RegExp(re.source, 'i').exec(text.slice(from));
+    if (m) end = Math.min(end, from + m.index);
+  }
+  return end;
+}
+
+/** Slice the text belonging to a section header found anywhere in the caption. */
+function sliceSection(text: string, start: RegExp, ends: RegExp[]): string {
+  const m = start.exec(text);
+  if (!m) return '';
+  const from = m.index + m[0].length;
+  return text.slice(from, firstMarkerIndex(text, ends, from)).trim();
+}
+
+/** Split an ingredients blob: line breaks/bullets first, else quantity starts. */
+export function splitItems(blob: string): string[] {
+  let parts = blob.split(/\n+|(?<=[a-z)\d])\s*[•·▪◦]\s*/i);
+  if (parts.length < 2) {
+    // Run-on ("2 bacon strips 2 sausage 16 oz chicken"): break before a new
+    // quantity token that begins another item.
+    parts = (parts[0] ?? blob).split(/\s+(?=(?:\d+(?:[.,/]\d+)?|[½¼¾⅓⅔⅛])\b)/);
+  }
+  return parts
+    .map((p) => p.replace(BULLET_RE, '').replace(/^[:\s]+/, '').trim())
+    .filter((p) => p.length > 2 && p.length < 200 && !isNoiseLine(p));
+}
+
+/** Split an instructions blob: line breaks first, else numbered/sentence steps. */
+export function splitSteps(blob: string): string[] {
+  let parts = blob.split(/\n+/);
+  if (parts.length < 2) {
+    const single = parts[0] ?? blob;
+    parts = single.split(/\s+(?=\d{1,2}[.)]\s)/); // "1. … 2. …"
+    if (parts.length < 2) parts = single.split(/(?<=[.!?])\s+(?=[A-Z0-9])/); // sentences
+  }
+  return parts
+    .map((p) => p.replace(BULLET_RE, '').replace(/^[:\s]+/, '').trim())
+    .filter((p) => p.length > 3 && !isNoiseLine(p));
+}
+
 /**
- * Structure a caption into ingredients/instructions. Explicit section headers
- * win; otherwise lines are classified by measurement vs. cooking-verb shape.
+ * Structure a caption into ingredients/instructions. If it has "Ingredients:" /
+ * "Directions:" markers (anywhere, even mid-paragraph), slice by them and split
+ * the slices (handling run-on captions with no line breaks). Otherwise fall
+ * back to per-line classification by measurement vs. cooking-verb shape.
  */
 export function parseCaptionRecipe(caption: string): {
   ingredients: string[];
   instructions: string[];
 } {
-  const lines = caption
-    .split(/\n+/)
-    .map((l) => l.replace(BULLET_RE, '').trim())
-    .filter((l) => l.length > 0);
+  const text = caption.replace(/\r/g, '');
 
+  const hasMarkers = MARK_INGREDIENTS.test(text) || MARK_INSTRUCTIONS.test(text);
+  if (hasMarkers) {
+    const ingBlob = sliceSection(text, MARK_INGREDIENTS, [MARK_INSTRUCTIONS, MARK_TRAILER]);
+    const insBlob = sliceSection(text, MARK_INSTRUCTIONS, [MARK_TRAILER, MARK_INGREDIENTS]);
+    return {
+      ingredients: ingBlob ? splitItems(ingBlob) : [],
+      instructions: insBlob ? splitSteps(insBlob) : [],
+    };
+  }
+
+  // Headerless: classify line by line.
   const ingredients: string[] = [];
   const instructions: string[] = [];
-  let section: 'ingredients' | 'instructions' | 'other' | null = null;
-
-  // Inline headers ("Ingredients: a, b, c. Whisk and freeze.") carry their
-  // content on the same line: comma-split the first sentence as ingredients,
-  // remaining cooking-verb sentences become steps.
-  const consumeInline = (rest: string): void => {
-    const cleaned = rest.replace(/^[:\s\-–]+/, '').trim();
-    if (!cleaned) return;
-    const [first = '', ...restSentences] = cleaned.split(/(?<=\.)\s+/);
-    ingredients.push(
-      ...first
-        .split(/,\s*/)
-        .map((s) => s.replace(/\.$/, '').trim())
-        .filter((s) => s.length > 2),
-    );
-    for (const sentence of restSentences) {
-      COOKING_VERB_RE.lastIndex = 0;
-      if (COOKING_VERB_RE.test(sentence)) instructions.push(sentence.trim());
-    }
-  };
-
-  for (const line of lines) {
-    if (HEADER_INGREDIENTS_RE.test(line)) {
-      section = 'ingredients';
-      consumeInline(line.replace(HEADER_INGREDIENTS_RE, ''));
-      continue;
-    }
-    if (HEADER_INSTRUCTIONS_RE.test(line)) {
-      section = 'instructions';
-      const rest = line.replace(HEADER_INSTRUCTIONS_RE, '').replace(/^[:\s\-–]+/, '').trim();
-      if (rest) instructions.push(...rest.split(/(?<=\.)\s+/).map((s) => s.trim()).filter(Boolean));
-      continue;
-    }
-    if (HEADER_OTHER_RE.test(line)) {
-      section = 'other';
-      continue;
-    }
-    if (isNoiseLine(line)) continue;
-
-    if (section === 'ingredients') ingredients.push(line);
-    else if (section === 'instructions') instructions.push(line);
-    else if (section === null) {
-      // No headers (yet): classify by shape.
-      MEASUREMENT_RE.lastIndex = 0;
-      COOKING_VERB_RE.lastIndex = 0;
-      if (line.length < 120 && MEASUREMENT_RE.test(line) && !COOKING_VERB_RE.test(line)) {
-        ingredients.push(line);
-      } else if (/^[A-Z]?\w+/.test(line) && COOKING_VERB_RE.test(line)) {
-        instructions.push(line);
-      }
+  for (const raw of text.split(/\n+/)) {
+    const line = raw.replace(BULLET_RE, '').trim();
+    if (line.length === 0 || isNoiseLine(line)) continue;
+    MEASUREMENT_RE.lastIndex = 0;
+    COOKING_VERB_RE.lastIndex = 0;
+    if (line.length < 120 && MEASUREMENT_RE.test(line) && !COOKING_VERB_RE.test(line)) {
+      ingredients.push(line);
+    } else if (/^[A-Z]?\w+/.test(line) && COOKING_VERB_RE.test(line)) {
+      instructions.push(line);
     }
   }
   return { ingredients, instructions };
