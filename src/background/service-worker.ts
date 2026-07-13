@@ -88,17 +88,19 @@ async function handleLocalSave(recipe: ExtractedRecipe): Promise<SaveResult> {
   if (existing[recipe.sourceUrl]) return { status: 'duplicate' };
   await saveLocalRecipe({ recipe, savedAt: Date.now() });
   await pushHistory({ title: recipe.title, sourceUrl: recipe.sourceUrl, savedAt: Date.now() });
-  // Ingredients but no steps (they're in the video) → generate on-device,
-  // patch the stored record. Fire-and-forget so the save returns instantly.
+  // Ingredients but no steps (they're in the video) → ask the backend to
+  // generate them with Claude, patch the stored record. Fire-and-forget so
+  // the save returns instantly; the inspector shows steps once they land.
   if (recipe.ingredients.length >= 2 && recipe.instructions.length === 0) {
     void enrichInstructions(recipe.sourceUrl, recipe.title, recipe.ingredients);
   }
   return { status: 'saved' };
 }
 
-/** Generate instructions on-device and merge them into the stored record. */
+/** Ask the backend to generate instructions, then merge them into the stored record. */
 async function enrichInstructions(url: string, title: string, ingredients: string[]): Promise<void> {
-  const steps = await generateInstructions(title, ingredients);
+  const settings = await getSettings();
+  const steps = await generateInstructions(title, ingredients, url, settings.apiBaseUrl);
   if (!steps || steps.length === 0) return;
   const recipes = await getLocalRecipes();
   const entry = recipes[url];

@@ -1,82 +1,44 @@
+import { BACKEND_ENABLED } from './config';
+import { resolveBaseUrl } from './api';
+
 /**
- * On-device instruction generation via Chrome's built-in Prompt API
- * (Gemini Nano). Runs locally in the service worker — no API key, no network,
- * private. Feature-detected: returns null anywhere it isn't available, so the
- * backend LLM pass (Bedrock) remains the production path.
+ * AI instruction generation — backend-routed.
  *
- * When a creator lists ingredients but leaves the steps in the video, we
- * generate plausible instructions from the dish name + ingredients and mark
- * them instructionsSource: 'ai' so they're always shown as AI-suggested, never
- * passed off as the creator's own method.
+ * When a creator lists ingredients but leaves the steps in the video, the
+ * backend generates plausible instructions from the dish name + ingredients
+ * using Claude (Haiku 4.5). The API key lives server-side ONLY — a browser
+ * extension is distributed to every user, so an embedded LLM key would be
+ * trivially extractable and abusable. The extension never holds a key; it asks
+ * the backend, which calls Claude. See docs/AI_INSTRUCTIONS.md for the endpoint
+ * spec and a reference Lambda.
+ *
+ * Inert until BACKEND_ENABLED (src/shared/config.ts). Generated steps are
+ * always stored/shown as instructionsSource: 'ai' — never as the creator's own.
  */
 
-interface LanguageModelSession {
-  prompt(input: string): Promise<string>;
-  destroy?: () => void;
-}
-interface LanguageModelApi {
-  availability?: () => Promise<'unavailable' | 'downloadable' | 'downloading' | 'available'>;
-  create: (opts?: unknown) => Promise<LanguageModelSession>;
+interface GenerateResponse {
+  instructions?: string[];
 }
 
-function getLanguageModel(): LanguageModelApi | null {
-  const g = globalThis as unknown as {
-    LanguageModel?: LanguageModelApi;
-    ai?: { languageModel?: LanguageModelApi };
-  };
-  return g.LanguageModel ?? g.ai?.languageModel ?? null;
-}
-
-/** True where on-device generation is at least possible (may need a download). */
-export async function aiInstructionsAvailable(): Promise<boolean> {
-  const lm = getLanguageModel();
-  if (!lm) return false;
-  try {
-    const status = (await lm.availability?.()) ?? 'available';
-    return status !== 'unavailable';
-  } catch {
-    return false;
-  }
-}
-
-const SYSTEM_PROMPT =
-  'You are a concise recipe assistant. Given a dish name and its ingredients, ' +
-  'write clear step-by-step cooking instructions. Reply with ONLY a numbered ' +
-  'list of steps — no preamble, no ingredient list, no commentary. Keep each ' +
-  'step to one sentence. If you are unsure of an exact time or temperature, ' +
-  'give a sensible typical value.';
-
-/** Generate cooking steps, or null if on-device AI is unavailable/failed. */
+/** POST /v1/extension/generate-instructions → steps, or null on any failure. */
 export async function generateInstructions(
   title: string,
   ingredients: string[],
+  sourceUrl = '',
+  apiBaseUrl = '',
 ): Promise<string[] | null> {
-  const lm = getLanguageModel();
-  if (!lm || ingredients.length === 0) return null;
-  let session: LanguageModelSession | null = null;
+  if (!BACKEND_ENABLED || ingredients.length === 0) return null;
   try {
-    const status = (await lm.availability?.()) ?? 'available';
-    if (status === 'unavailable') return null;
-    session = await lm.create({
-      initialPrompts: [{ role: 'system', content: SYSTEM_PROMPT }],
+    const res = await fetch(`${resolveBaseUrl(apiBaseUrl)}/v1/extension/generate-instructions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, ingredients, sourceUrl, source: 'chrome-extension' }),
     });
-    const input =
-      `Dish: ${title}\n\nIngredients:\n${ingredients.join('\n')}\n\n` +
-      `Write the cooking steps for this dish.`;
-    const output = await session.prompt(input);
-    return parseSteps(output);
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => null)) as GenerateResponse | null;
+    const steps = body?.instructions?.map((s) => s.trim()).filter((s) => s.length > 2);
+    return steps && steps.length > 0 ? steps : null;
   } catch {
     return null;
-  } finally {
-    session?.destroy?.();
   }
-}
-
-/** Turn the model's numbered-list reply into a clean step array. */
-export function parseSteps(output: string): string[] | null {
-  const steps = output
-    .split(/\n+/)
-    .map((l) => l.replace(/^\s*(?:step\s*)?\d{1,2}[.):]\s*/i, '').replace(/^[-*•\s]+/, '').trim())
-    .filter((l) => l.length > 2 && !/^(here('|’)?s|sure|certainly|instructions?:?$)/i.test(l));
-  return steps.length > 0 ? steps : null;
 }
