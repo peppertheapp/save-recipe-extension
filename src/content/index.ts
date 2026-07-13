@@ -4,7 +4,7 @@ import { detectHeuristicRecipe } from './heuristic';
 import { PepperButton } from './button';
 import { CompetitorOverlay, targetsForHost, type CardRecipeRef } from './competitor';
 import { isCollectionPage, MigrationBanner } from './migration';
-import { getSettings, updateSettings } from '../shared/storage';
+import { getLocalRecipes, getSettings, updateSettings } from '../shared/storage';
 import type { ExtractedRecipe, Message, SaveResult } from '../shared/types';
 
 let button: PepperButton | null = null;
@@ -70,10 +70,11 @@ async function handleFloatingSave(): Promise<void> {
   const result = await saveCurrentRecipe();
   switch (result.status) {
     case 'saved':
-      button.setState('saved');
+      button.setSaved(true);
+      button.celebrate();
       break;
     case 'duplicate':
-      button.setState('duplicate');
+      button.setSaved(true);
       break;
     case 'queued':
       button.setState('error', 'Offline — queued, will retry');
@@ -82,6 +83,24 @@ async function handleFloatingSave(): Promise<void> {
       button.setState('error', result.error);
       break;
   }
+}
+
+/** The stored record for the current page's recipe, if any. */
+async function savedRecordForCurrentPage(): Promise<{ recipe: ExtractedRecipe; savedAt: number } | null> {
+  if (!currentRecipe) return null;
+  try {
+    const saved = await getLocalRecipes();
+    return saved[currentRecipe.sourceUrl] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Reflect already-imported recipes as a persistent checkmark + details button. */
+async function refreshSavedState(signature: string): Promise<void> {
+  const record = await savedRecordForCurrentPage();
+  if (signature !== lastSignature) return; // page changed while we checked
+  button?.setSaved(record !== null);
 }
 
 function runDetection(): void {
@@ -104,8 +123,9 @@ function runDetection(): void {
 
   // No recipe → no button. It only exists when there's something to save.
   if (recipe) {
-    button?.setState('green');
+    button?.setSaved(false); // assume unsaved; the async check below corrects it
     button?.show();
+    void refreshSavedState(signature);
   } else {
     button?.hide();
   }
@@ -146,6 +166,9 @@ async function main(): Promise<void> {
 
   button = new PepperButton({
     onSave: () => void handleFloatingSave(),
+    onShowDetails: () => {
+      void savedRecordForCurrentPage().then((record) => button?.showDetails(record));
+    },
     onPositionChange: (pos) => {
       try {
         void updateSettings({ buttonPosition: pos }).catch(() => teardown());
