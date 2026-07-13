@@ -208,6 +208,23 @@ function extractTikTok(doc: Document, url: string): SocialCapture {
 
 const normalize = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
 
+/**
+ * Comment bodies are noisier than captions, so the bar is higher: an explicit
+ * ingredients/recipe header, or 4+ measurement/cooking-verb signals. Returns
+ * the longest qualifying comment (recipes beat "yum, I added 2 cups!").
+ */
+export function strongestRecipeComment(doc: Document): string {
+  let best = '';
+  for (const { text } of scriptCaptions(doc, ['body'])) {
+    if (text.length < 40 || text.length <= best.length) continue;
+    const strong =
+      /\b(ingredients?|recipe)\b\s*:?/i.test(text) ||
+      (text.match(MEASUREMENT_RE)?.length ?? 0) + (text.match(COOKING_VERB_RE)?.length ?? 0) >= 4;
+    if (strong) best = text;
+  }
+  return best;
+}
+
 function extractFacebook(doc: Document, url: string): SocialCapture {
   // Visible texts: dedicated caption nodes plus dir="auto" blocks (the one
   // attribute FB's obfuscation never strips). Truncated ("… See more") is
@@ -222,18 +239,32 @@ function extractFacebook(doc: Document, url: string): SocialCapture {
     if (text.length > 20 && text.length < 5000) visible.push(text);
   }
 
-  // 1) Relay payloads hold the FULL caption — but for this reel AND preloaded
-  //    siblings. The active one is whichever also appears on screen; take the
-  //    longest such payload (visible copies are often "See more"-truncated).
+  // 1) Relay payloads hold the FULL caption — but possibly for this reel AND
+  //    preloaded siblings. A single candidate is unambiguous (reel overlays
+  //    render the caption outside dir=auto, so don't demand a DOM match);
+  //    multiple candidates disambiguate against what's on screen.
   const candidates = scriptCaptions(doc, ['message', 'savable_description']);
-  let best: ScriptCaption | null = null;
-  for (const candidate of candidates) {
-    const head = normalize(candidate.text).slice(0, 30);
-    const onScreen = visible.some((v) => {
-      const nv = normalize(v);
-      return nv.startsWith(head) || normalize(candidate.text).startsWith(nv.slice(0, 30));
-    });
-    if (onScreen && candidate.text.length > (best?.text.length ?? 0)) best = candidate;
+  let best: ScriptCaption | null = candidates.length === 1 ? (candidates[0] ?? null) : null;
+  if (!best) {
+    for (const candidate of candidates) {
+      const head = normalize(candidate.text).slice(0, 30);
+      const onScreen = visible.some((v) => {
+        const nv = normalize(v);
+        return nv.startsWith(head) || normalize(candidate.text).startsWith(nv.slice(0, 30));
+      });
+      if (onScreen && candidate.text.length > (best?.text.length ?? 0)) best = candidate;
+    }
+  }
+  if (best) {
+    // Creators often tease in the caption and put the recipe in a pinned
+    // comment. If the caption alone isn't recipe-shaped, append the strongest
+    // recipe-looking comment body so the save carries the actual recipe.
+    let caption = best.text;
+    if (!looksLikeRecipe(caption)) {
+      const comment = strongestRecipeComment(doc);
+      if (comment) caption = `${caption}\n\n${comment}`;
+    }
+    best = { ...best, text: caption };
   }
   if (best) {
     // Author + cover live in the same relay object — search nearest to the
@@ -374,13 +405,35 @@ export function parseCaptionRecipe(caption: string): {
   const instructions: string[] = [];
   let section: 'ingredients' | 'instructions' | 'other' | null = null;
 
+  // Inline headers ("Ingredients: a, b, c. Whisk and freeze.") carry their
+  // content on the same line: comma-split the first sentence as ingredients,
+  // remaining cooking-verb sentences become steps.
+  const consumeInline = (rest: string): void => {
+    const cleaned = rest.replace(/^[:\s\-–]+/, '').trim();
+    if (!cleaned) return;
+    const [first = '', ...restSentences] = cleaned.split(/(?<=\.)\s+/);
+    ingredients.push(
+      ...first
+        .split(/,\s*/)
+        .map((s) => s.replace(/\.$/, '').trim())
+        .filter((s) => s.length > 2),
+    );
+    for (const sentence of restSentences) {
+      COOKING_VERB_RE.lastIndex = 0;
+      if (COOKING_VERB_RE.test(sentence)) instructions.push(sentence.trim());
+    }
+  };
+
   for (const line of lines) {
     if (HEADER_INGREDIENTS_RE.test(line)) {
       section = 'ingredients';
+      consumeInline(line.replace(HEADER_INGREDIENTS_RE, ''));
       continue;
     }
     if (HEADER_INSTRUCTIONS_RE.test(line)) {
       section = 'instructions';
+      const rest = line.replace(HEADER_INSTRUCTIONS_RE, '').replace(/^[:\s\-–]+/, '').trim();
+      if (rest) instructions.push(...rest.split(/(?<=\.)\s+/).map((s) => s.trim()).filter(Boolean));
       continue;
     }
     if (HEADER_OTHER_RE.test(line)) {

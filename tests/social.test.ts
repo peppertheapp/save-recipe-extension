@@ -128,6 +128,32 @@ describe('detectSocialRecipe — Facebook', () => {
     expect(r!.description).toContain('Sauté garlic in butter');
   });
 
+  it('accepts a single caption payload without a visible-DOM match, pulling the recipe from a pinned comment', () => {
+    // Modeled on live reel/1530324475209311: reel overlay renders over the
+    // channel profile, caption isn't in dir=auto, caption is a teaser and the
+    // recipe lives in a comment body payload.
+    const doc = docFromHtml(`<!doctype html><html><head>
+      <script>h({"message":{"text":"Chocolate Cloud \\u2013 One bite and you're in Heaven!! \\ud83d\\ude0b"}});</script>
+      <script>h({"comments":[{"body":{"text":"Ingredients: 4 egg whites, 1 cup sugar, 2 cups cream, 200g dark chocolate. Whisk whites, fold in sugar, freeze 4 hours."}},{"body":{"text":"Looks amazing!!"}}]});</script>
+    </head><body>
+      <div dir="auto">827K followers • 53 following</div>
+      <div dir="auto">Hello everyone!! Welcome to my cooking channel!!</div>
+    </body></html>`);
+    const r = detectSocialRecipe(doc, 'https://www.facebook.com/reel/1530324475209311');
+    expect(r).not.toBeNull();
+    expect(r!.title).toContain('Chocolate Cloud');
+    expect(r!.description).toContain('4 egg whites');
+    expect(r!.ingredients.length).toBeGreaterThan(0);
+  });
+
+  it('does not let weak comments rescue a non-recipe caption', () => {
+    const doc = docFromHtml(`<!doctype html><html><head>
+      <script>h({"message":{"text":"Sunset dinner date night with my favorite person!!"}});</script>
+      <script>h({"comments":[{"body":{"text":"So cute, we made pasta with 2 cups of flour last week"}}]});</script>
+    </head><body></body></html>`);
+    expect(detectSocialRecipe(doc, 'https://www.facebook.com/reel/555')).toBeNull();
+  });
+
   it('falls back to recipe-looking dir="auto" blocks when scripts have nothing', () => {
     const doc = docFromHtml(`<!doctype html><html><body>
       <div dir="auto">just vibes</div>
