@@ -282,6 +282,26 @@ describe('parseCaptionRecipe', () => {
     expect(instructions).toEqual([]);
   });
 
+  it('recognizes "For the X:" group headers as ingredients (honey garlic chicken)', () => {
+    const caption =
+      'EASY 15-minute 1-PAN Honey Garlic Chicken (recipe 👇)\n' +
+      'Macros per serving: approx 552 calories | 51g P\n' +
+      'Announcements:\nComment "cookbook" and I\'ll send you the link!\n' +
+      'For the chicken:\n16 oz chicken breast\nSalt & Pepper, to taste\n1 tsp Garlic powder\n1 tbsp Olive oil\n' +
+      'For the sauce:\n2 tbsp Butter\n2 tbsp brown sugar\n4-6 cloves garlic, finely minced\n2 tbsp honey\n' +
+      'To serve:\nWhite rice';
+    const { ingredients, instructions } = parseCaptionRecipe(caption);
+    // Group sub-headers dropped; non-measurement lines kept; promo excluded.
+    expect(ingredients).toContain('16 oz chicken breast');
+    expect(ingredients).toContain('Salt & Pepper, to taste');
+    expect(ingredients).toContain('2 tbsp honey');
+    expect(ingredients).toContain('White rice');
+    expect(ingredients).not.toContain('For the sauce:');
+    expect(ingredients.join(' ')).not.toContain('cookbook');
+    // No steps in the caption — the video has them.
+    expect(instructions).toEqual([]);
+  });
+
   it('parses run-on captions with no line breaks and mid-text markers', () => {
     // Modeled on the live cabbage reel: one paragraph, promo before the recipe,
     // "Ingredients:" glued to the first item, items space-separated.

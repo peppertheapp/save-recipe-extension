@@ -249,7 +249,8 @@ export class PepperButton {
       body.appendChild(meta);
 
       body.appendChild(this.sectionList('Ingredients', r.ingredients, 'ul'));
-      body.appendChild(this.sectionList('Instructions', r.instructions, 'ol'));
+      const stepsLabel = r.instructionsSource === 'ai' ? 'Instructions (AI-suggested)' : 'Instructions';
+      body.appendChild(this.sectionList(stepsLabel, r.instructions, 'ol'));
 
       if (r.description) {
         const h = document.createElement('h4');

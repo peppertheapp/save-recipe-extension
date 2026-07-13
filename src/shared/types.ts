@@ -12,6 +12,8 @@ export interface ExtractedRecipe {
   totalTimeMinutes?: number;
   ingredients: string[];
   instructions: string[];
+  /** 'ai' when instructions were generated on-device from the ingredients. */
+  instructionsSource?: 'extracted' | 'ai';
   cuisine?: string[];
   category?: string[];
   keywords?: string[];

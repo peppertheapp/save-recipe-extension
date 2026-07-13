@@ -460,11 +460,16 @@ function isNoiseLine(line: string): boolean {
 }
 
 // Section markers, matched ANYWHERE in the text (not just line starts) — many
-// captions are one run-on paragraph with the labels buried mid-text.
-const MARK_INGREDIENTS = /(?:^|[\s\n])(ingredients?|what you(?:'|’)?ll need)\s*:?/i;
+// captions are one run-on paragraph with the labels buried mid-text. Also
+// recognizes "For the chicken:" / "For the sauce:" group headers that stand in
+// for an "Ingredients:" label on many creator captions.
+const MARK_INGREDIENTS =
+  /(?:^|[\s\n])(ingredients?|what you(?:'|’)?ll need|for the [\w\s&'’-]{2,25}?:)\s*:?/i;
 const MARK_INSTRUCTIONS = /(?:^|[\s\n])(instructions?|directions?|method|steps?|how to make it?)\s*:?/i;
 /** Where a section ends: the next section, or trailing promo/notes/hashtags. */
 const MARK_TRAILER = /(?:^|[\s\n])(notes?|tips?|nutrition|announcements?|follow|comment|link in)\s*:?/i;
+/** Ingredient sub-group labels to drop from the item list. */
+const GROUP_HEADER_RE = /^(for the\b.*|to (serve|garnish|top|finish)\b.*|topping|sauce|marinade)\s*:?$/i;
 
 /** First index of any marker in `text` at/after `from`, else text length. */
 function firstMarkerIndex(text: string, markers: RegExp[], from: number): number {
@@ -494,7 +499,7 @@ export function splitItems(blob: string): string[] {
   }
   return parts
     .map((p) => p.replace(BULLET_RE, '').replace(/^[:\s]+/, '').trim())
-    .filter((p) => p.length > 2 && p.length < 200 && !isNoiseLine(p));
+    .filter((p) => p.length > 2 && p.length < 200 && !isNoiseLine(p) && !GROUP_HEADER_RE.test(p));
 }
 
 /** Split an instructions blob: line breaks first, else numbered/sentence steps. */
