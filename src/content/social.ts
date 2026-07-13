@@ -209,6 +209,59 @@ function extractTikTok(doc: Document, url: string): SocialCapture {
 const normalize = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
 
 /**
+ * The active reel's caption text, anchored to the viewport. A reel feed holds
+ * many posts at once; selecting a caption by content ("longest recipe") grabs
+ * the wrong reel. The video centered in the viewport identifies the active
+ * post — we walk up to its caption container and return that text (normalized,
+ * usually "See more"-truncated). Empty when there's no layout (jsdom tests) or
+ * no video. Verified against a live reel feed 2026-07-13.
+ */
+export function activeReelAnchor(doc: Document): string {
+  const videos = [...doc.querySelectorAll('video')];
+  if (videos.length === 0) return '';
+  const view = doc.defaultView;
+  const cx = (view?.innerWidth ?? 0) / 2;
+  const cy = (view?.innerHeight ?? 0) / 2;
+  let active: Element | null = null;
+  let bestDist = Infinity;
+  for (const v of videos) {
+    const r = v.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue; // hidden / no layout
+    const d = Math.hypot(r.left + r.width / 2 - cx, r.top + r.height / 2 - cy);
+    if (d < bestDist) {
+      bestDist = d;
+      active = v;
+    }
+  }
+  if (!active) return '';
+  // First ancestor with substantial text = the tightest post container (its
+  // own caption; sibling reels live in separate subtrees).
+  for (let el: Element | null = active, i = 0; el && i < 12; el = el.parentElement, i++) {
+    const text = (el as HTMLElement).innerText?.trim() ?? '';
+    if (text.length > 60) return normalize(text);
+  }
+  return '';
+}
+
+/**
+ * Pick the caption belonging to the active reel: its first line (the caption
+ * title, before any "See more" cut) must appear in the viewport anchor text.
+ * Returns null when the active reel is known but no candidate matches it —
+ * correctness-first, we never fall back to a sibling's caption.
+ */
+export function pickActiveCaptionByAnchor(
+  candidates: ScriptCaption[],
+  anchor: string,
+): ScriptCaption | null {
+  for (const c of candidates) {
+    const firstLine = normalize(c.text.split('\n')[0] ?? '');
+    const probe = firstLine.length >= 8 ? firstLine : normalize(c.text).slice(0, 24);
+    if (probe.length >= 8 && anchor.includes(probe)) return c;
+  }
+  return null;
+}
+
+/**
  * Comment bodies are noisier than captions, so the bar is higher: an explicit
  * ingredients/recipe header, or 4+ measurement/cooking-verb signals. Returns
  * the longest qualifying comment (recipes beat "yum, I added 2 cups!").
@@ -255,23 +308,34 @@ function extractFacebook(doc: Document, url: string): SocialCapture {
     list.reduce<ScriptCaption | null>((a, b) => (b.text.length > (a?.text.length ?? 0) ? b : a), null);
 
   const candidates = scriptCaptions(doc, ['message', 'savable_description']);
-  const recipeish = candidates.filter((c) => looksLikeRecipe(c.text));
 
+  // PRIMARY: anchor to the reel centered in the viewport. On a feed this is the
+  // only correct signal — content heuristics can't tell two real recipes apart.
+  const anchor = activeReelAnchor(doc);
   let best: ScriptCaption | null;
-  if (recipeish.length > 0) {
-    // The recipe caption itself (on-screen ones win ties).
-    const visibleRecipes = recipeish.filter(onScreen);
-    best = longest(visibleRecipes.length > 0 ? visibleRecipes : recipeish);
-  } else {
-    // No recipe-shaped caption — this reel may tease and hide the recipe in a
-    // pinned comment. Take the ACTIVE caption (on-screen, else the only one)
-    // and append the strongest recipe-looking comment.
-    const active = candidates.find(onScreen) ?? (candidates.length === 1 ? candidates[0] : null);
-    if (active) {
+  if (anchor) {
+    best = pickActiveCaptionByAnchor(candidates, anchor);
+    // Active reel known but caption not matched (not loaded yet / teaser): try
+    // its comment recipe, else give up rather than grab a sibling's caption.
+    if (best && !looksLikeRecipe(best.text)) {
       const comment = strongestRecipeComment(doc);
-      best = comment ? { ...active, text: `${active.text}\n\n${comment}` } : null;
+      if (comment) best = { ...best, text: `${best.text}\n\n${comment}` };
+    }
+  } else {
+    // FALLBACK (permalink pages / no video / tests): the recipe gate
+    // disambiguates — sibling teasers aren't recipe-shaped, on-screen wins ties.
+    const recipeish = candidates.filter((c) => looksLikeRecipe(c.text));
+    if (recipeish.length > 0) {
+      const visibleRecipes = recipeish.filter(onScreen);
+      best = longest(visibleRecipes.length > 0 ? visibleRecipes : recipeish);
     } else {
-      best = null;
+      const active = candidates.find(onScreen) ?? (candidates.length === 1 ? candidates[0] : null);
+      if (active) {
+        const comment = strongestRecipeComment(doc);
+        best = comment ? { ...active, text: `${active.text}\n\n${comment}` } : null;
+      } else {
+        best = null;
+      }
     }
   }
   if (best) {

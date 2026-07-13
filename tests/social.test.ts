@@ -6,6 +6,7 @@ import {
   looksLikeRecipe,
   metasAreFresh,
   parseCaptionRecipe,
+  pickActiveCaptionByAnchor,
 } from '../src/content/social';
 
 function docFromHtml(html: string): Document {
@@ -194,6 +195,32 @@ describe('detectSocialRecipe — Pinterest', () => {
     const r = detectSocialRecipe(doc, 'https://www.pinterest.com/pin/1234567890/');
     expect(r).not.toBeNull();
     expect(r!.description).toContain('carnitas');
+  });
+});
+
+describe('pickActiveCaptionByAnchor (reel viewport disambiguation)', () => {
+  const mk = (text: string) => ({ text, scriptSource: '', index: 0 });
+  // Anchor = normalized text of the viewport-centered reel container, e.g.
+  // "chris lee · follow chris lee · original audio no fold dumpling… see more".
+  const dumplingAnchor =
+    'chris lee · follow chris lee · original audio no fold dumpling… see more';
+
+  it('matches the active reel caption by its first line, ignoring loaded siblings', () => {
+    const candidates = [
+      mk('This is the Best way to Eat Potatoes!!\n2.2 lb potatoes'),
+      mk('TOP 3 Cookies — They Melt in your Mouth\n2 cups flour'),
+      mk('No Fold Dumpling\n548 Calories\n47gP | 37gC | 23gF\n1 cup flour, 1 lb pork'),
+    ];
+    const picked = pickActiveCaptionByAnchor(candidates, dumplingAnchor);
+    expect(picked?.text).toContain('No Fold Dumpling');
+  });
+
+  it('returns null when no candidate matches the active reel (never grabs a sibling)', () => {
+    const candidates = [
+      mk('This is the Best way to Eat Potatoes!!\n2.2 lb potatoes'),
+      mk('TOP 3 Cookies — They Melt in your Mouth\n2 cups flour'),
+    ];
+    expect(pickActiveCaptionByAnchor(candidates, dumplingAnchor)).toBeNull();
   });
 });
 
