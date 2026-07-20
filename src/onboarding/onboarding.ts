@@ -23,6 +23,9 @@ const connectStatus = $('connect-status');
 const qrWrap = $('qr-wrap');
 const doneCard = $('done');
 
+// Use the real Pepper logo asset (not a traced placeholder) for the hero badge.
+($<HTMLImageElement>('badge-logo')).src = chrome.runtime.getURL('icons/button-logo.png');
+
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let rotateTimer: ReturnType<typeof setTimeout> | null = null;
 
