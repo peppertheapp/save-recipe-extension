@@ -1,6 +1,6 @@
 {
   "name": "pepper-extension",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Pepper Recipe Importer — save any recipe to your Pepper profile in one click",
   "private": true,
   "type": "module",
