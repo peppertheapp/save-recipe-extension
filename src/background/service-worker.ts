@@ -22,8 +22,13 @@ const ICON_SET = (color: 'green' | 'red'): Record<number, string> => ({
   128: `icons/pepper-${color}-128.png`,
 });
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   void chrome.alarms.create(RETRY_ALARM, { periodInMinutes: 1 });
+  // First install → open the onboarding tab so the user can connect right away
+  // instead of hunting for the toolbar popup.
+  if (details.reason === 'install') {
+    void chrome.tabs.create({ url: chrome.runtime.getURL('src/onboarding/onboarding.html') });
+  }
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {

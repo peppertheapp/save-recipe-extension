@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Welcome to Pepper</title>
+    <style>
+      :root {
+        --coral: #ff5f50;
+        --coral-deep: #d63a29;
+        --ink: #2a1e1a;
+        --paper: #fffaf7;
+        --card: #ffffff;
+        --tint: #fff0ec;
+        --line: #f4ddd5;
+        --muted: #927e77;
+        --ok: #188038;
+        --radius: 16px;
+        --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+        --display: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #f6ece8; --paper: #1a1310; --card: #241a16;
+          --tint: #2e201b; --line: #3a2a24; --muted: #b39c94; --ok: #6fd48a;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: var(--paper); color: var(--ink);
+        font-family: var(--font); line-height: 1.6; -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 80px; }
+
+      .hero {
+        background: var(--coral); color: #fff; text-align: center;
+        padding: 56px 24px 60px; border-radius: 0 0 36px 36px; margin-bottom: 44px;
+      }
+      .badge {
+        width: 72px; height: 72px; border-radius: 50%; background: rgba(255,255,255,0.16);
+        display: inline-flex; align-items: center; justify-content: center; margin-bottom: 18px;
+      }
+      .badge svg { width: 40px; height: 40px; }
+      .hero h1 {
+        font-family: var(--display); font-weight: 700; letter-spacing: -0.02em;
+        font-size: clamp(1.8rem, 4.5vw, 2.6rem); margin: 0 0 10px; text-wrap: balance;
+      }
+      .hero p { margin: 0 auto; max-width: 30ch; color: rgba(255,255,255,0.92); font-size: 1.1rem; }
+
+      .step { display: flex; gap: 18px; align-items: flex-start; margin-bottom: 34px; }
+      .step-num {
+        flex: none; width: 40px; height: 40px; border-radius: 50%;
+        background: var(--coral); color: #fff; font-family: var(--display); font-weight: 700;
+        display: flex; align-items: center; justify-content: center; font-size: 1.05rem;
+      }
+      .step-body { flex: 1; }
+      h2 { font-family: var(--display); font-weight: 700; letter-spacing: -0.01em; font-size: 1.25rem; margin: 4px 0 6px; }
+      p.sub { color: var(--muted); margin: 0 0 14px; }
+
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
+
+      .reassure { display: flex; gap: 14px; align-items: flex-start; }
+      .reassure svg { flex: none; width: 26px; height: 26px; color: var(--coral-deep); margin-top: 2px; }
+      .reassure p { margin: 0; font-size: 0.97rem; }
+      .reassure strong { font-weight: 600; }
+
+      .connect { display: grid; grid-template-columns: 220px 1fr; gap: 26px; align-items: center; }
+      @media (max-width: 560px) { .connect { grid-template-columns: 1fr; } }
+      #qr-wrap {
+        width: 200px; height: 200px; background: #fff; border-radius: 12px; padding: 8px;
+        margin: 0 auto; display: flex; align-items: center; justify-content: center;
+      }
+      #qr-wrap canvas, #qr-wrap svg, #qr-wrap img { width: 100%; height: 100%; border-radius: 6px; }
+      .connect-label { font-family: var(--display); font-weight: 700; margin: 0 0 4px; }
+      .connect-hint { color: var(--muted); font-size: 0.92rem; margin: 0 0 16px; }
+      .divider {
+        display: flex; align-items: center; gap: 10px; color: var(--muted);
+        font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; margin: 16px 0;
+      }
+      .divider::before, .divider::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+      .row { display: flex; gap: 10px; }
+      input[type="text"] {
+        flex: 1; padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px;
+        font-size: 0.95rem; background: var(--paper); color: var(--ink);
+      }
+      button.primary {
+        background: var(--coral); color: #fff; border: none; border-radius: 10px;
+        padding: 11px 20px; font-family: var(--display); font-weight: 700; font-size: 0.95rem; cursor: pointer;
+      }
+      button.primary:disabled { opacity: 0.55; cursor: default; }
+      .status { margin-top: 12px; font-size: 0.95rem; min-height: 1.3em; }
+      .status.ok { color: var(--ok); font-weight: 600; }
+      .status.err { color: var(--coral-deep); }
+
+      .done {
+        display: none; background: var(--tint); border: 1px solid var(--line);
+        border-radius: var(--radius); padding: 22px; text-align: center; margin-top: 30px;
+      }
+      .done.show { display: block; }
+      .done h2 { margin-top: 0; }
+      .done p { color: var(--muted); margin: 0; }
+
+      .tips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 8px; }
+      @media (max-width: 560px) { .tips { grid-template-columns: 1fr; } }
+      .tip { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+      .tip h3 { font-family: var(--display); font-size: 0.98rem; margin: 0 0 4px; }
+      .tip p { margin: 0; color: var(--muted); font-size: 0.88rem; }
+      a { color: var(--coral-deep); }
+      :focus-visible { outline: 3px solid var(--coral-deep); outline-offset: 2px; border-radius: 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="hero">
+      <span class="badge" aria-hidden="true">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#fff" d="M12,80 C18,66 34,52 56,38 C60,34 64,31 68,30 C74,28 81,31 82,38 C83,48 74,62 56,73 C40,82 22,88 13,84 C9,82 10,84 12,80 Z"/>
+          <path fill="#fff" d="M73,25 C76,17 80,10 86,4 C89,1 94,4 92,9 C89,15 86,21 83,27 C81,31 78,31 76,29 C74,28 72,27 73,25 Z"/>
+        </svg>
+      </span>
+      <h1>You're one tap from saving recipes anywhere</h1>
+      <p>Let's connect your account, then you're ready to cook.</p>
+    </div>
+
+    <div class="wrap">
+      <!-- Reassurance -->
+      <div class="step">
+        <div class="step-num" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 19.3 5 15.4 5 11V6z"/></svg>
+        </div>
+        <div class="step-body">
+          <h2>What Pepper can (and can't) do</h2>
+          <p class="sub">Chrome warned you it can "read and change data on all websites." Here's the plain-English version.</p>
+          <div class="card reassure">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+            <p><strong>Pepper adds its Save button to recipe pages and reads the page to find the recipe — that's all.</strong> The page content is checked right in your browser to spot a recipe; it's never stored anywhere and is discarded the moment you leave the page. Nothing is sent to Pepper until you click Save, and then only the recipe itself. It never touches your logins, your accounts, or anything you type.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connect -->
+      <div class="step">
+        <div class="step-num" aria-hidden="true">1</div>
+        <div class="step-body">
+          <h2>Connect your Pepper account</h2>
+          <p class="sub">Open the Pepper app &rarr; Settings &rarr; Connect browser extension.</p>
+          <div class="card connect">
+            <div>
+              <div id="qr-wrap" aria-label="Pairing QR code"></div>
+            </div>
+            <div>
+              <p class="connect-label">Scan with the Pepper app</p>
+              <p class="connect-hint">Point your phone's camera at the code to link this browser to your collection.</p>
+              <div class="divider">or paste your code</div>
+              <div class="row">
+                <input id="user-id" type="text" placeholder="Pepper secret code" autocomplete="off" />
+                <button id="connect" class="primary">Connect</button>
+              </div>
+              <div id="connect-status" class="status"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Success -->
+      <div class="done" id="done">
+        <h2>You're all set 🎉</h2>
+        <p>Open any recipe and tap the coral pepper in the corner to save it. Happy cooking!</p>
+      </div>
+
+      <!-- How it works -->
+      <div class="step">
+        <div class="step-num" aria-hidden="true">2</div>
+        <div class="step-body">
+          <h2>Start saving</h2>
+          <p class="sub">The button only appears where there's a recipe to save, so it stays out of your way.</p>
+          <div class="tips">
+            <div class="tip"><h3>Recipe sites &amp; blogs</h3><p>The pepper turns coral when it spots a recipe. Tap to save the whole thing.</p></div>
+            <div class="tip"><h3>Social posts</h3><p>Instagram, TikTok, Facebook, Pinterest — Pepper grabs the recipe from the caption.</p></div>
+            <div class="tip"><h3>Your old favorites</h3><p>Open your saved list on another site and import the whole collection at once.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./onboarding.ts"></script>
+  </body>
+</html>

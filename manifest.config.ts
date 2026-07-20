@@ -38,7 +38,9 @@ export default defineManifest({
   web_accessible_resources: [
     {
       // Button logo, rendered by the content script's <img> in page context.
-      resources: ['icons/button-logo.png'],
+      // Onboarding page is listed so CRXJS bundles it; opened in its own tab
+      // on install (see service-worker onInstalled).
+      resources: ['icons/button-logo.png', 'src/onboarding/onboarding.html'],
       matches: ['<all_urls>'],
     },
   ],
