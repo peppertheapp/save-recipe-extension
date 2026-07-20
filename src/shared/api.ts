@@ -1,7 +1,16 @@
 import type { ExtractedRecipe, SaveResult, VerifyResult } from './types';
 
 const PRODUCTION_BASE_URL = 'https://api.peppertheapp.com';
-const EXTENSION_VERSION = chrome.runtime.getManifest().version;
+
+// Read lazily, not at module load: touching chrome.* at import time crashes the
+// whole module graph in any non-extension context (previews, tests).
+function extensionVersion(): string {
+  try {
+    return chrome.runtime.getManifest().version;
+  } catch {
+    return 'unknown';
+  }
+}
 
 export function resolveBaseUrl(override: string): string {
   return (override || PRODUCTION_BASE_URL).replace(/\/$/, '');
@@ -34,7 +43,7 @@ export async function importRecipe(
         userId,
         recipe,
         source: 'chrome-extension',
-        extensionVersion: EXTENSION_VERSION,
+        extensionVersion: extensionVersion(),
       }),
     });
   } catch (err) {

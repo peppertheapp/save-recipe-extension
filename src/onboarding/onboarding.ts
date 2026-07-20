@@ -24,7 +24,12 @@ const qrWrap = $('qr-wrap');
 const doneCard = $('done');
 
 // Use the real Pepper logo asset (not a traced placeholder) for the hero badge.
-($<HTMLImageElement>('badge-logo')).src = chrome.runtime.getURL('icons/button-logo.png');
+// Guarded so a missing runtime can never block the rest of the page (the QR).
+try {
+  $<HTMLImageElement>('badge-logo').src = chrome.runtime.getURL('icons/button-logo.png');
+} catch {
+  /* non-extension preview context */
+}
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let rotateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -50,6 +55,13 @@ async function showPairingQr(): Promise<void> {
   const code = generatePairingCode();
   const content = pairingUrl(code);
 
+  // Render a plain QR immediately so the box is never blank, then upgrade to
+  // the branded canvas (identical to the popup) once the logo image loads.
+  try {
+    qrWrap.innerHTML = renderSVG(content, { ecc: 'H', border: 2 });
+  } catch {
+    /* uqr should never throw; ignore */
+  }
   try {
     const canvas = document.createElement('canvas');
     await new QrCodeWithLogo({
@@ -62,7 +74,7 @@ async function showPairingQr(): Promise<void> {
     }).getCanvas();
     qrWrap.replaceChildren(canvas);
   } catch {
-    qrWrap.innerHTML = renderSVG(content, { ecc: 'M', border: 2 });
+    /* keep the plain QR rendered above */
   }
 
   if (BACKEND_ENABLED) {
@@ -104,11 +116,17 @@ connectBtn.addEventListener('click', () => {
 });
 
 async function init(): Promise<void> {
-  const settings = await getSettings();
+  // Render the QR first and unconditionally — it must never be gated on the
+  // settings read (which touches chrome.storage and would otherwise block it).
   void showPairingQr();
-  if (settings.userId) {
-    userIdInput.value = settings.userId;
-    markConnected(BACKEND_ENABLED ? 'Connected ✓' : 'Secret code saved ✓');
+  try {
+    const settings = await getSettings();
+    if (settings.userId) {
+      userIdInput.value = settings.userId;
+      markConnected(BACKEND_ENABLED ? 'Connected ✓' : 'Secret code saved ✓');
+    }
+  } catch {
+    /* no stored settings available (e.g. preview context) */
   }
 }
 

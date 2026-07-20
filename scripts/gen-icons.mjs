@@ -106,11 +106,38 @@ function decodePng(buf) {
 
 const mark = decodePng(readFileSync(join(iconsDir, 'button-logo.png')));
 
+/**
+ * Area-averaged alpha of the source mark for one target pixel. Averaging every
+ * source pixel that falls under the target pixel (with fractional edge weights)
+ * gives a crisp downscale — point/bilinear sampling smears at heavy reduction,
+ * which is what made the icon look blurry.
+ */
+function sampleMarkAlpha(mark, markSize, offset, x, y) {
+  const sx = mark.width / markSize; // source px per target px
+  const sy = mark.height / markSize;
+  const x0 = (x - offset) * sx, x1 = (x + 1 - offset) * sx;
+  const y0 = (y - offset) * sy, y1 = (y + 1 - offset) * sy;
+  if (x1 <= 0 || y1 <= 0 || x0 >= mark.width || y0 >= mark.height) return 0;
+  const ix0 = Math.max(0, Math.floor(x0)), ix1 = Math.min(mark.width, Math.ceil(x1));
+  const iy0 = Math.max(0, Math.floor(y0)), iy1 = Math.min(mark.height, Math.ceil(y1));
+  let sum = 0, area = 0;
+  for (let py = iy0; py < iy1; py++) {
+    const wy = Math.min(py + 1, y1) - Math.max(py, y0);
+    for (let px = ix0; px < ix1; px++) {
+      const wx = Math.min(px + 1, x1) - Math.max(px, x0);
+      const w = wx * wy;
+      sum += mark.px[(py * mark.width + px) * 4 + 3] * w;
+      area += w;
+    }
+  }
+  return area > 0 ? sum / area : 0;
+}
+
 /** Rounded-square coral tile with the white chili mark centered. */
 function makeIcon(size, [r, g, b]) {
   const out = Buffer.alloc(size * size * 4);
   const radius = size * 0.22; // app-tile rounding
-  const markScale = 0.66;
+  const markScale = 0.7;
   const markSize = size * markScale;
   const offset = (size - markSize) / 2;
 
@@ -131,21 +158,7 @@ function makeIcon(size, [r, g, b]) {
       const o = (y * size + x) * 4;
       const tileA = roundedAlpha(x, y);
       if (tileA === 0) continue;
-      // bilinear sample of the white mark's alpha
-      const mx = ((x - offset) / markSize) * mark.width;
-      const my = ((y - offset) / markSize) * mark.height;
-      let markA = 0;
-      if (mx >= 0 && my >= 0 && mx < mark.width - 1 && my < mark.height - 1) {
-        const x0 = Math.floor(mx), y0 = Math.floor(my);
-        const fx = mx - x0, fy = my - y0;
-        const at = (xx, yy) => mark.px[(yy * mark.width + xx) * 4 + 3];
-        markA =
-          at(x0, y0) * (1 - fx) * (1 - fy) +
-          at(x0 + 1, y0) * fx * (1 - fy) +
-          at(x0, y0 + 1) * (1 - fx) * fy +
-          at(x0 + 1, y0 + 1) * fx * fy;
-      }
-      const t = markA / 255;
+      const t = sampleMarkAlpha(mark, markSize, offset, x, y) / 255;
       out[o] = Math.round(255 * t + r * (1 - t));
       out[o + 1] = Math.round(255 * t + g * (1 - t));
       out[o + 2] = Math.round(255 * t + b * (1 - t));
