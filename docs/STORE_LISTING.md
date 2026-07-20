@@ -47,7 +47,8 @@ when submitting. Keep this in sync with what's actually submitted.
 - [ ] Screenshots: at least 1, ideally 4–5, 1280×800 (green button on a recipe
       page, save animation, popup with history, red/save-anyway state)
 - [ ] Small promo tile 440×280 (optional but recommended)
-- [ ] Real brand icons to replace the generated placeholders in `public/icons/`
+- [x] Brand icons — the coral Pepper chili tile, generated from the real logo
+      at all sizes by `npm run gen:icons` (`public/icons/pepper-{green,red}-*.png`).
 
 ## Privacy practices tab
 
@@ -62,11 +63,16 @@ when submitting. Keep this in sync with what's actually submitted.
 - Host permission `https://api.peppertheapp.com/*` — the only server the
   extension talks to; receives a recipe when the user clicks save and
   verifies the user's pairing code.
-- Content script on all sites (`<all_urls>`) — recipes live on any domain, so
-  the extension checks each page's embedded recipe metadata (schema.org
-  JSON-LD/microdata) locally to decide whether to show the green save button.
-  Page content is read locally only; nothing leaves the browser until the
-  user clicks save, and then only the extracted recipe is sent.
+- Content script on all sites (`<all_urls>`) — **paste this as the "read your
+  data on all websites" justification (this is the copy the user asked for; it
+  appears on the listing's Privacy tab, NOT in the install dialog, which Chrome
+  controls and does not let developers edit):**
+
+  > Pepper checks each page you visit for a recipe. That page content is read
+  > only inside your browser, purely to decide whether to show the Save button —
+  > it is never stored anywhere and is discarded as soon as you leave the page.
+  > Nothing is sent to Pepper until you click Save, and then only the recipe
+  > itself is sent.
 
 **Remote code:** none. All code is packaged in the extension.
 
