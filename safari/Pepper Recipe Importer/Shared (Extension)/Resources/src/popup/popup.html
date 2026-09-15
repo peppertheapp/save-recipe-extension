@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pepper Recipe Importer</title>
+    <style>
+      body {
+        width: 320px;
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        color: #222;
+      }
+      header {
+        background: #ff5f50;
+        color: #fff;
+        padding: 14px 16px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      section { padding: 14px 16px; border-bottom: 1px solid #eee; }
+      h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin: 0 0 8px; }
+      .row { display: flex; gap: 8px; }
+      input[type='text'] {
+        flex: 1; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px;
+      }
+      button.primary {
+        background: #ff5f50; color: #fff; border: none; border-radius: 6px;
+        padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+      }
+      button.primary:disabled { opacity: 0.5; cursor: default; }
+      .status { margin-top: 8px; font-size: 13px; }
+      .status.ok { color: #188038; }
+      .status.err { color: #d93025; }
+      label.toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+      .hint { font-size: 11px; color: #999; margin-top: 6px; }
+      .qr-wrap {
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        padding: 6px 0 2px;
+      }
+      .qr-wrap canvas, .qr-wrap svg, .qr-wrap img { width: 200px; height: 200px; border-radius: 8px; }
+      .divider {
+        display: flex; align-items: center; gap: 10px;
+        color: #bbb; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+        margin: 12px 0 10px;
+      }
+      .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid #eee; }
+      ul#history { list-style: none; margin: 0; padding: 0; max-height: 160px; overflow-y: auto; }
+      ul#history li { padding: 6px 0; font-size: 13px; border-bottom: 1px solid #f4f4f4; }
+      ul#history a { color: #1a73e8; text-decoration: none; }
+      .empty { font-size: 13px; color: #999; }
+    </style>
+    <script type="module" crossorigin src="/assets/popup.html-C5Cn2vfr.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/pairing-DcKKhwrJ.js">
+    <link rel="modulepreload" crossorigin href="/assets/storage-CwXX3ACY.js">
+  </head>
+  <body>
+    <header>🌶 Pepper Recipe Importer</header>
+
+    <section id="connect-section">
+      <h2>Account</h2>
+      <div class="qr-wrap" id="qr-wrap"></div>
+      <div class="hint" style="text-align: center">
+        Scan with the Pepper app to link your account:<br />
+        Settings → Connect browser extension → Scan
+      </div>
+      <div id="connect-status" class="status"></div>
+      <div class="divider">or connect manually</div>
+      <div class="row">
+        <input id="user-id" type="text" placeholder="Pepper secret code" autocomplete="off" />
+        <button id="connect" class="primary">Connect</button>
+      </div>
+      <div class="hint">Find your secret code in the Pepper app: Settings → Connect browser extension.</div>
+    </section>
+
+    <section>
+      <h2>Recent saves</h2>
+      <ul id="history"></ul>
+      <div id="history-empty" class="empty">Nothing saved yet — find a recipe!</div>
+    </section>
+
+  </body>
+</html>

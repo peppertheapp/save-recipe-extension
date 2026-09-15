@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "gen:icons": "node scripts/gen-icons.mjs",
     "mock-api": "node scripts/mock-api.mjs",
-    "zip": "npm run build && cd dist && rm -f ../pepper-extension.zip && zip -qr ../pepper-extension.zip . -x '*.map' && cd .. && ls -la pepper-extension.zip"
+    "zip": "npm run build && cd dist && rm -f ../pepper-extension.zip && zip -qr ../pepper-extension.zip . -x '*.map' && cd .. && ls -la pepper-extension.zip",
+    "safari:sync": "npm run build && rsync -a --delete dist/ 'safari/Pepper Recipe Importer/Shared (Extension)/Resources/' && find 'safari/Pepper Recipe Importer/Shared (Extension)/Resources' -name '*.map' -delete && echo 'Synced dist -> Safari Resources. Open the Xcode project to build/upload.'"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0",

@@ -1,0 +1,7 @@
+# Xcode build output & user state — keep the project, ignore the junk.
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+.DS_Store

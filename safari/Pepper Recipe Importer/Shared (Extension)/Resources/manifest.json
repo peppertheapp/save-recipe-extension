@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "Pepper Recipe Importer",
+  "version": "1.2.0",
+  "description": "Save any recipe to your Pepper profile in one click. Pepper spots recipes on any site and saves them with one tap.",
+  "icons": {
+    "16": "icons/pepper-green-16.png",
+    "32": "icons/pepper-green-32.png",
+    "48": "icons/pepper-green-48.png",
+    "128": "icons/pepper-green-128.png"
+  },
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/pepper-red-16.png",
+      "32": "icons/pepper-red-32.png",
+      "48": "icons/pepper-red-48.png",
+      "128": "icons/pepper-red-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "service-worker-loader.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "assets/index.ts-loader-Bp0dwVWX.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://api.peppertheapp.com/*",
+    "https://api.recime.app/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "icons/button-logo.png",
+        "src/onboarding/onboarding.html",
+        "assets/storage-CwXX3ACY.js",
+        "assets/storage-CwXX3ACY.js.map",
+        "assets/index.ts-EeNRKDHx.js",
+        "assets/index.ts-EeNRKDHx.js.map"
+      ],
+      "use_dynamic_url": false
+    }
+  ]
+}
