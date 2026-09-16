@@ -6,7 +6,7 @@ export default defineManifest({
   name: 'Pepper Recipe Importer',
   version: pkg.version,
   description:
-    'Save any recipe to your Pepper profile in one click. Pepper spots recipes on any site and saves them with one tap.',
+    'Save any recipe to your Pepper profile in one click. Pepper spots recipes on any site and saves them in a tap.',
   icons: {
     16: 'icons/pepper-green-16.png',
     32: 'icons/pepper-green-32.png',
