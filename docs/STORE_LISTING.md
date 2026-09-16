@@ -127,3 +127,28 @@ when submitting. Keep this in sync with what's actually submitted.
 - If Phase 4 (MyRecipes overlay) is enabled by then: add the replacement
   disclosure back to the listing description and re-add a user toggle —
   that pairing is what keeps the overlay on the right side of CWS policy.
+
+---
+
+# Safari (Mac App Store) submission
+
+App Store Connect record: **Pepper Recipe Importer**, macOS, team Pepper App Inc. (NVR4BQ99LF),
+bundle id `com.peppertheapp.PepperRecipeImporter`. Build & upload via Xcode (see docs/SAFARI.md).
+
+**Subtitle (30):** One-click recipe saving
+
+**Keywords (100):** recipe,recipes,save,cookbook,cooking,food,meal,kitchen,import,bookmark,safari extension
+
+**Category:** Food & Drink
+
+**Description:** (same as the Chrome description above, minus the MyRecipes-overlay disclosure)
+
+**App Review notes (required — reviewer needs a working code):**
+> This app installs a Safari extension. To test:
+> 1. Open the app, then Safari → Settings → Extensions → enable "Pepper Recipe Importer" and allow on all websites.
+> 2. Visit any recipe page (e.g. https://www.allrecipes.com/recipe/223042/chicken-parmesan/). The coral Pepper button appears — click it to save.
+> 3. To connect an account, click the Pepper toolbar button and enter this code: <REAL CODE FROM THE PEPPER APP>
+
+**Validation fixes applied (required by App Store, error 90242 / 90849):**
+- LSApplicationCategoryType = public.app-category.food-and-drink in the macOS/iOS app Info.plist.
+- manifest.json description shortened to <=112 chars.
