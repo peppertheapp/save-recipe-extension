@@ -25,7 +25,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.ts-loader-Bp0dwVWX.js"
+        "assets/index.ts-loader-Botpq681.js"
       ],
       "matches": [
         "<all_urls>"
@@ -38,8 +38,7 @@
     "alarms"
   ],
   "host_permissions": [
-    "https://api.peppertheapp.com/*",
-    "https://api.recime.app/*"
+    "https://api.peppertheapp.com/*"
   ],
   "web_accessible_resources": [
     {
@@ -51,8 +50,8 @@
         "src/onboarding/onboarding.html",
         "assets/storage-CwXX3ACY.js",
         "assets/storage-CwXX3ACY.js.map",
-        "assets/index.ts-EeNRKDHx.js",
-        "assets/index.ts-EeNRKDHx.js.map"
+        "assets/index.ts-MgQ4Km3R.js",
+        "assets/index.ts-MgQ4Km3R.js.map"
       ],
       "use_dynamic_url": false
     }

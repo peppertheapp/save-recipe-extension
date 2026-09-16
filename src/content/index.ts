@@ -4,14 +4,12 @@ import { detectHeuristicRecipe } from './heuristic';
 import { PepperButton } from './button';
 import { CompetitorOverlay, targetsForHost, type CardRecipeRef } from './competitor';
 import { isCollectionPage, MigrationBanner } from './migration';
-import { isRecimeCollectionPage, RecimeImportBanner } from './recime';
 import { getLocalRecipes, getSettings, updateSettings } from '../shared/storage';
 import type { ExtractedRecipe, Message, SaveResult } from '../shared/types';
 
 let button: PepperButton | null = null;
 let overlay: CompetitorOverlay | null = null;
 let banner: MigrationBanner | null = null;
-let recimeBanner: RecimeImportBanner | null = null;
 let currentRecipe: ExtractedRecipe | null = null;
 let lastSignature = '';
 let dead = false;
@@ -30,8 +28,6 @@ function teardown(): void {
   overlay = null;
   banner?.destroy();
   banner = null;
-  recimeBanner?.destroy();
-  recimeBanner = null;
 }
 
 function contextAlive(): boolean {
@@ -217,28 +213,6 @@ async function main(): Promise<void> {
       return 'error';
     });
     banner.mount();
-  }
-
-  // ReciMe dashboard: offer to import the user's whole ReciMe collection
-  // (full content pulled from ReciMe's API — see recime.ts).
-  if (isRecimeCollectionPage(location.href)) {
-    recimeBanner = new RecimeImportBanner(
-      async (recipe) => {
-        const result = await send({ type: 'SAVE_RECIPE', recipe });
-        if (result.status === 'saved' || result.status === 'queued') return 'saved';
-        if (result.status === 'duplicate') return 'duplicate';
-        return 'error';
-      },
-      async () => {
-        try {
-          const s = await getSettings();
-          return { connected: Boolean(s.userId) };
-        } catch {
-          return { connected: false };
-        }
-      },
-    );
-    recimeBanner.mount();
   }
 
   runDetection();

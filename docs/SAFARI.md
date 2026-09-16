@@ -42,7 +42,7 @@ extension read it from the manifest), the same as for Chrome.
 4. Run it locally first (▶). The app window explains how to enable the extension:
    Safari → Settings → Extensions → turn on **Pepper Recipe Importer**. On macOS
    you must also allow it on the sites it uses (it requests all sites for recipe
-   detection, plus recime.app for import).
+   detection).
 5. To ship: **Product → Archive** → **Distribute App** → **App Store Connect**.
    Do this once for the macOS app and once for iOS.
 6. In App Store Connect, complete the listing (name, screenshots, description,
@@ -56,8 +56,5 @@ extension read it from the manifest), the same as for Chrome.
   hint. No code change needed. Verify the background works when testing in Safari.
 - `chrome.*` APIs used here (storage, alarms, runtime, tabs, action) are all
   supported by Safari's web-extension bridge.
-- The ReciMe import fetches `api.recime.app` from the content script; that host is
-  in `host_permissions`, so Safari treats it as extension-privileged. Confirm the
-  import works once running in Safari (grant site access when prompted).
 - A compile check passes today:
   `xcodebuild build -scheme "Pepper Recipe Importer (macOS)" -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO`.

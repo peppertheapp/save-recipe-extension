@@ -20,7 +20,7 @@ export interface ExtractedRecipe {
   nutrition?: Record<string, string>;
   ratingValue?: number;
   ratingCount?: number;
-  extractionMethod: 'json-ld' | 'microdata' | 'server' | 'recime';
+  extractionMethod: 'json-ld' | 'microdata' | 'server';
 }
 
 export interface SaveResult {
